@@ -1,8 +1,10 @@
+#include <BoardConfig.h>
 #include <HalGPIO.h>
 #include <Logging.h>
 #include <Preferences.h>
 #include <SPI.h>
 #include <Wire.h>
+#include <XteinkDetect.h>
 #include <esp_sleep.h>
 
 // Global HalGPIO instance
@@ -189,18 +191,67 @@ HalGPIO::DeviceType detectDeviceTypeWithFingerprint() {
   return HalGPIO::DeviceType::X4;
 }
 
+// Newer X3 production runs use a UC8279d controller on the same panel pins as
+// the original UC8253. Probe before SPI owns those pins, then cache only a
+// conclusive result so normal boots do not repeatedly reset the display bus.
+constexpr char NVS_KEY_EPD_OVERRIDE[] = "epd_ovr";  // 0=auto, 1=uc8253, 2=uc8279
+constexpr char NVS_KEY_EPD_CACHED[] = "epd_det";    // 0=unknown, 1=uc8253, 2=uc8279
+
+bool detectX3DisplayIsUc8279() {
+  const NvsDeviceValue overrideValue = readNvsDeviceValue(NVS_KEY_EPD_OVERRIDE, NvsDeviceValue::Unknown);
+  if (overrideValue != NvsDeviceValue::Unknown) {
+    LOG_INF("HW", "EPD controller override active: %s", overrideValue == NvsDeviceValue::X3 ? "UC8279" : "UC8253");
+    return overrideValue == NvsDeviceValue::X3;
+  }
+
+  const NvsDeviceValue cachedValue = readNvsDeviceValue(NVS_KEY_EPD_CACHED, NvsDeviceValue::Unknown);
+  if (cachedValue != NvsDeviceValue::Unknown) {
+    LOG_INF("HW", "Using cached EPD controller: %s", cachedValue == NvsDeviceValue::X3 ? "UC8279" : "UC8253");
+    return cachedValue == NvsDeviceValue::X3;
+  }
+
+  uint8_t ver[5] = {0};
+  uint8_t flg = 0;
+  const freeink::X3DisplayVerdict verdict = freeink::detectX3DisplayController(ver, &flg);
+  LOG_INF("HW", "EPD probe: ver=%02X %02X %02X %02X %02X flg=%02X verdict=%u", ver[0], ver[1], ver[2], ver[3],
+          ver[4], flg, static_cast<unsigned>(verdict));
+
+  if (verdict == freeink::X3DisplayVerdict::Uc8279Confirmed) {
+    writeNvsDeviceValue(NVS_KEY_EPD_CACHED, NvsDeviceValue::X3);
+    return true;
+  }
+  if (verdict == freeink::X3DisplayVerdict::Uc8253Assumed) {
+    writeNvsDeviceValue(NVS_KEY_EPD_CACHED, NvsDeviceValue::X4);
+  }
+  // Leave inconclusive probes uncached so the next boot can retry.
+  return false;
+}
+
 }  // namespace
 
 void HalGPIO::begin() {
-  inputMgr.begin();
-  SPI.begin(EPD_SCLK, SPI_MISO, EPD_MOSI, EPD_CS);
-
 #ifdef FORCE_DEVICE_X3
   _deviceType = DeviceType::X3;
   LOG_INF("HW", "Device override active via build flag: X3");
 #else
   _deviceType = detectDeviceTypeWithFingerprint();
 #endif
+
+  // The controller probe bit-bangs the display pins and must complete before
+  // SPI.begin() attaches them to the SPI matrix.
+  const bool x3IsUc8279 = deviceIsX3() && detectX3DisplayIsUc8279();
+  BoardConfig::selectDevice(!deviceIsX3() ? BoardConfig::Board::XteinkX4
+                            : x3IsUc8279  ? BoardConfig::Board::XteinkX3Uc8279
+                                          : BoardConfig::Board::XteinkX3);
+
+  // Keep the SDK's factory-aware per-batch controller selection for X4 while
+  // the X3-specific override/cache above remains authoritative for recovery.
+  if (deviceIsX4()) {
+    freeink::applyXteinkDisplayController();
+  }
+
+  SPI.begin(EPD_SCLK, SPI_MISO, EPD_MOSI, EPD_CS);
+  inputMgr.begin();
 
   if (deviceIsX4()) {
     pinMode(BAT_GPIO0, INPUT);

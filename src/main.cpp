@@ -1142,7 +1142,7 @@ void loop() {
     startSerialLogging(t1, false);
   }
 
-  renderer.setFadingFix(SETTINGS.fadingFix);
+  renderer.setDisplayPowerSaving(SETTINGS.displayPowerSaving);
 
   if (serialLoggingStarted && Serial && millis() - lastMemPrint >= 10000) {
     LOG_INF("MEM", "Free: %d bytes, Total: %d bytes, Min Free: %d bytes, MaxAlloc: %d bytes", ESP.getFreeHeap(),

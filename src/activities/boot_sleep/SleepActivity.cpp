@@ -149,7 +149,7 @@ bool tryRenderCachedSleepImage(const SleepImageRenderCache& cache, GfxRenderer& 
     file.close();
     return false;
   }
-  renderer.displayGrayscaleBase(HalDisplay::FULL_REFRESH);
+  renderer.displayGrayscaleBaseIntermediate(HalDisplay::FULL_REFRESH);
 
   if (!readExact(file, frameBuffer, bufferSize)) {
     file.close();
@@ -825,7 +825,7 @@ void SleepActivity::renderBitmapSleepScreen(const Bitmap& bitmap, const SleepIma
   if (hasGreyscale) {
     // OEM grayscale pipeline base: use a full sleep-screen paint so the panel
     // enters deep sleep from a clean B/W baseline before the gray nudge refresh.
-    renderer.displayGrayscaleBase(HalDisplay::FULL_REFRESH);
+    renderer.displayGrayscaleBaseIntermediate(HalDisplay::FULL_REFRESH);
   } else {
     renderer.displayBuffer(HalDisplay::FULL_REFRESH, TURN_OFF_SCREEN_AFTER_SLEEP_REFRESH);
   }
@@ -998,7 +998,7 @@ void SleepActivity::renderLastScreenSleepScreen() const {
   if (gpio.deviceIsX3()) {
     // The controller still holds the displayed reader frame here, so the X3 can
     // paint the sleep icon differentially without a full-screen black flash.
-    renderer.displayGrayscaleBase(HalDisplay::FAST_REFRESH);
+    renderer.displayGrayscaleBaseIntermediate(HalDisplay::FAST_REFRESH);
     // Repeat the no-change AA-pre-BW(mid) pass so unchanged white and black
     // pixels get an extra no-flash settle before the panel is powered down.
     renderer.displayGrayscaleBase(HalDisplay::FAST_REFRESH, TURN_OFF_SCREEN_AFTER_SLEEP_REFRESH);
@@ -1222,7 +1222,11 @@ void SleepActivity::renderOverlaySleepScreen() const {
   // over the sleep image.
   const bool shouldRunGrayscalePass = shouldUseReaderPageBackground && backgroundSupportsGrayscale && !overlayDrawn &&
                                       (backgroundWasRebuilt || (overlayBackgroundBufferStored && !path.empty()));
-  renderer.displayBuffer(HalDisplay::FULL_REFRESH, !shouldRunGrayscalePass && TURN_OFF_SCREEN_AFTER_SLEEP_REFRESH);
+  if (shouldRunGrayscalePass) {
+    renderer.displayBufferIntermediate(HalDisplay::FULL_REFRESH);
+  } else {
+    renderer.displayBuffer(HalDisplay::FULL_REFRESH, TURN_OFF_SCREEN_AFTER_SLEEP_REFRESH);
+  }
 
   if (!shouldRunGrayscalePass) {
     return;

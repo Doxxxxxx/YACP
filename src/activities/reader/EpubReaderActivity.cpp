@@ -577,8 +577,8 @@ constexpr int GRAYSCALE_STRIP_ROWS = 80;
 
 bool runTiledGrayscalePass(GfxRenderer& renderer, const Page& page, const int fontId, const int marginLeft,
                            const int marginTop, const bool foregroundBlack, const bool needsTextGrayscale,
-                           const bool needsImageGrayscale, const bool highContrastText, uint8_t* scratch,
-                           const size_t scratchSize, TiledGrayscaleTimings& timings) {
+                           const bool needsImageGrayscale, uint8_t* scratch, const size_t scratchSize,
+                           TiledGrayscaleTimings& timings) {
   if ((!needsTextGrayscale && !needsImageGrayscale) || !renderer.supportsStripGrayscale()) {
     return false;
   }
@@ -610,9 +610,6 @@ bool runTiledGrayscalePass(GfxRenderer& renderer, const Page& page, const int fo
     }
   };
 
-  const bool previousHighContrast = renderer.getHighContrastTextAntialiasing();
-  renderer.setHighContrastTextAntialiasing(highContrastText);
-
   renderPlane(GfxRenderer::GRAYSCALE_LSB, true);
   timings.grayLsb = millis();
 
@@ -620,7 +617,6 @@ bool runTiledGrayscalePass(GfxRenderer& renderer, const Page& page, const int fo
   timings.grayMsb = millis();
 
   renderer.setRenderMode(GfxRenderer::BW);
-  renderer.setHighContrastTextAntialiasing(previousHighContrast);
   renderer.displayGrayBuffer();
   timings.grayDisplay = millis();
   renderer.cleanupGrayscaleWithFrameBuffer();
@@ -4560,9 +4556,6 @@ void EpubReaderActivity::renderContents(std::unique_ptr<Page> page, const int fo
   const bool needsImageGrayscale = pageHasImages;
   const bool needsTextGrayscale = SETTINGS.textAntiAliasing && foregroundBlack;
   const bool needsAnyGrayscale = needsTextGrayscale || needsImageGrayscale;
-  const bool highContrastText =
-      gpio.deviceIsX3() && needsTextGrayscale &&
-      SETTINGS.refreshAction == CrossPointSettings::REFRESH_ACTION_BW_REINFORCEMENT;
   const int contentBottom = renderer.getScreenHeight() - orientedMarginBottom;
 
   const auto finalizeBufferComposition = [&]() {
@@ -4632,7 +4625,7 @@ void EpubReaderActivity::renderContents(std::unique_ptr<Page> page, const int fo
     if (page->getImageBoundingBox(imgX, imgY, imgW, imgH)) {
       renderer.fillRect(imgX + orientedMarginLeft, imgY + orientedMarginTop, imgW, imgH, false);
       const auto tImageBlankDisplay = millis();
-      renderer.displayBuffer(HalDisplay::FAST_REFRESH);
+      renderer.displayBufferIntermediate(HalDisplay::FAST_REFRESH);
       const uint32_t imageBlankDisplayMs = millis() - tImageBlankDisplay;
 
       // Re-render page content to restore images into the blanked area
@@ -4641,11 +4634,11 @@ void EpubReaderActivity::renderContents(std::unique_ptr<Page> page, const int fo
       composePageBuffer();
       const uint32_t imageRestoreRenderMs = millis() - tImageRestoreRender;
       const auto tImageFinalDisplay = millis();
-      renderer.displayBuffer(HalDisplay::FAST_REFRESH);
+      renderer.displayBufferIntermediate(HalDisplay::FAST_REFRESH);
       const uint32_t imageFinalDisplayMs = millis() - tImageFinalDisplay;
       logImagePageProfile(imageBlankDisplayMs, imageRestoreRenderMs, imageFinalDisplayMs);
     } else {
-      renderer.displayBuffer(HalDisplay::HALF_REFRESH);
+      renderer.displayBufferIntermediate(HalDisplay::HALF_REFRESH);
     }
     // The image's own page is handled above and doesn't count toward the full
     // refresh cadence. But the grayscale pass below leaves gray charge in the
@@ -4663,12 +4656,12 @@ void EpubReaderActivity::renderContents(std::unique_ptr<Page> page, const int fo
         // Text AA is recreated from a reinforced BW base below. Reuse the OEM
         // differential base waveform so gray edge pixels are driven through a
         // known black/white state without a full-screen flash.
-        renderer.displayGrayscaleBase(HalDisplay::FAST_REFRESH);
+        renderer.displayGrayscaleBaseIntermediate(HalDisplay::FAST_REFRESH);
       } else {
         // Images and explicitly requested full cleanups retain the stronger
         // scrub because large stable gray regions do not naturally cycle
         // through black or white as text edges do.
-        renderer.displayBuffer(HalDisplay::HALF_REFRESH);
+        renderer.displayBufferIntermediate(HalDisplay::HALF_REFRESH);
         renderer.preconditionGrayscale();
       }
       pagesUntilFullRefresh = SETTINGS.getRefreshFrequency();
@@ -4676,7 +4669,7 @@ void EpubReaderActivity::renderContents(std::unique_ptr<Page> page, const int fo
       // Use the grayscale-aware base waveform so the first visible pass is
       // closer to the final anti-aliased result instead of flashing darker
       // text first and softening after the grayscale overlay.
-      renderer.displayGrayscaleBase(HalDisplay::FAST_REFRESH);
+      renderer.displayGrayscaleBaseIntermediate(HalDisplay::FAST_REFRESH);
       ReaderUtils::countOrdinaryRefresh(pagesUntilFullRefresh);
     }
   } else {
@@ -4687,8 +4680,8 @@ void EpubReaderActivity::renderContents(std::unique_ptr<Page> page, const int fo
   TiledGrayscaleTimings tiledTimings;
   if (needsAnyGrayscale && ensureGrayscaleStripScratch() &&
       runTiledGrayscalePass(renderer, *page, fontId, orientedMarginLeft, orientedMarginTop, foregroundBlack,
-                            needsTextGrayscale, needsImageGrayscale, highContrastText, grayscaleStripScratch.get(),
-                            grayscaleStripScratchSize, tiledTimings)) {
+                            needsTextGrayscale, needsImageGrayscale, grayscaleStripScratch.get(), grayscaleStripScratchSize,
+                            tiledTimings)) {
     const auto tEnd = millis();
     LOG_DBG("ERS",
             "Page render (tiled): prewarm=%lums bw_render=%lums display=%lums "
@@ -4707,12 +4700,16 @@ void EpubReaderActivity::renderContents(std::unique_ptr<Page> page, const int fo
   const bool canApplyGrayscale = needsAnyGrayscale && storedBwBuffer;
   if (needsAnyGrayscale && !storedBwBuffer) {
     LOG_ERR("ERS", "Skipping grayscale enhancement: failed to store BW backup");
+    if (renderer.isDisplayPowerSavingEnabled()) {
+      // The base pass deliberately stayed powered for the expected gray pass.
+      // Finish with the intact BW frame so an allocation failure cannot leave
+      // the panel's analog supply enabled for the rest of the reading interval.
+      renderer.displayBuffer(HalDisplay::FAST_REFRESH);
+    }
   }
 
   // grayscale rendering
   if (canApplyGrayscale) {
-    const bool previousHighContrast = renderer.getHighContrastTextAntialiasing();
-    renderer.setHighContrastTextAntialiasing(highContrastText);
     renderer.clearScreen(0x00);
     renderer.setRenderMode(GfxRenderer::GRAYSCALE_LSB);
     composeGrayscaleBuffer();
@@ -4725,7 +4722,6 @@ void EpubReaderActivity::renderContents(std::unique_ptr<Page> page, const int fo
     composeGrayscaleBuffer();
     renderer.copyGrayscaleMsbBuffers();
     const auto tGrayMsb = millis();
-    renderer.setHighContrastTextAntialiasing(previousHighContrast);
 
     // display grayscale part
     renderer.displayGrayBuffer();

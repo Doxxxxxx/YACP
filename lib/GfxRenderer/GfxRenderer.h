@@ -45,9 +45,8 @@ class GfxRenderer {
 
   HalDisplay& display;
   RenderMode renderMode;
-  bool highContrastTextAntialiasing = false;
   Orientation orientation;
-  bool fadingFix;
+  bool displayPowerSaving;
   uint8_t* frameBuffer = nullptr;
   uint16_t panelWidth = HalDisplay::DISPLAY_WIDTH;
   uint16_t panelHeight = HalDisplay::DISPLAY_HEIGHT;
@@ -117,7 +116,7 @@ class GfxRenderer {
       : display(halDisplay),
         renderMode(BW),
         orientation(Portrait),
-        fadingFix(false),
+        displayPowerSaving(false),
         bitmapScratchMutex_(xSemaphoreCreateMutex()) {
     assert(bitmapScratchMutex_ != nullptr && "Failed to create GfxRenderer bitmap scratch mutex");
   }
@@ -168,13 +167,16 @@ class GfxRenderer {
   void setOrientation(const Orientation o) { orientation = o; }
   Orientation getOrientation() const { return orientation; }
 
-  // Fading fix control
-  void setFadingFix(const bool enabled) { fadingFix = enabled; }
+  // Powers down the panel's analog supply after the final refresh pass.
+  void setDisplayPowerSaving(const bool enabled) { displayPowerSaving = enabled; }
+  bool isDisplayPowerSavingEnabled() const { return displayPowerSaving; }
 
   // Screen ops
   int getScreenWidth() const;
   int getScreenHeight() const;
   void displayBuffer(HalDisplay::RefreshMode refreshMode = HalDisplay::FAST_REFRESH, bool turnOffScreen = false) const;
+  // Use only when another physical refresh pass follows immediately.
+  void displayBufferIntermediate(HalDisplay::RefreshMode refreshMode = HalDisplay::FAST_REFRESH) const;
   // EXPERIMENTAL: Windowed update - display only a rectangular region
   // void displayWindow(int x, int y, int width, int height) const;
   void invertScreen() const;
@@ -256,8 +258,6 @@ class GfxRenderer {
   // Grayscale functions
   void setRenderMode(const RenderMode mode) { this->renderMode = mode; }
   RenderMode getRenderMode() const { return renderMode; }
-  void setHighContrastTextAntialiasing(const bool enabled) { highContrastTextAntialiasing = enabled; }
-  bool getHighContrastTextAntialiasing() const { return highContrastTextAntialiasing; }
   // Grayscale preconditioning settle pass (no-op on X4). The rect overload
   // takes the gray region in LOGICAL screen coordinates and rotates it to the
   // panel; the no-arg overload settles the full frame. Call after the BW base
@@ -269,6 +269,7 @@ class GfxRenderer {
   // `fallback`).
   void displayGrayscaleBase(HalDisplay::RefreshMode fallback = HalDisplay::HALF_REFRESH,
                             bool turnOffScreen = false) const;
+  void displayGrayscaleBaseIntermediate(HalDisplay::RefreshMode fallback = HalDisplay::HALF_REFRESH) const;
   void copyGrayscaleLsbBuffers() const;
   void copyGrayscaleMsbBuffers() const;
   void displayGrayBuffer(bool turnOffScreen = false) const;
