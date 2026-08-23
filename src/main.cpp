@@ -855,6 +855,8 @@ void setupDisplayAndFonts(bool seamless = false) {
 }
 
 void setup() {
+  BoardConfig::holdPowerRails();
+
   t1 = millis();
 
   const esp_reset_reason_t rawResetReason = esp_reset_reason();

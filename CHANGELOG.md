@@ -1,8 +1,9 @@
-## [v1.6.2-yacp.10] - 2026-08-20
+## [v1.6.2-yacp.19] - 2026-08-23
 
 This pre-release extends YACP to newer X3 production runs whose display uses a UC8279d controller instead of the
-original UC8253. The controller is detected before normal SPI initialization and a conclusive result is cached for
-later boots. The UC8279d path is included for hardware validation and should still be treated as experimental.
+original UC8253. The controller is detected directly from the display bus before normal SPI initialization on every
+boot, so an inconclusive read cannot persist the wrong driver. The UC8279d path is included for hardware validation
+and should still be treated as experimental.
 
 ### Added
 
@@ -24,6 +25,11 @@ later boots. The UC8279d path is included for hardware validation and should sti
 
 ### Fixed
 
+- Aligned X3 controller selection with CrossPoint's proven boot sequence: power rails are asserted first, the base X3
+  profile is selected before probing, retained RESET pin holds are released, and the live result is applied before
+  hardware SPI initialization.
+- Removed the experimental cached controller fallback, which could permanently select UC8253 after one failed probe
+  and keep the display frozen on a UC8279d X3.
 - Restored CrossInk's text anti-aliasing mapping for YACP: dark-gray and light-gray glyph edge pixels are written to
   the same grayscale planes on X3 and X4, without the YACP-specific high-contrast reduction.
 - Corrected the original UC8253 X3 grayscale waveform so the white-to-black transition remains passive during the
