@@ -21,6 +21,7 @@ constexpr int kStandaloneNoRtcMaxVerticalOffset = 32;
 constexpr int kPerBookRtcTopCardMaxExtra = 84;
 constexpr int kReadingRhythmWeekCount = 13;
 constexpr size_t kReadingRhythmMonthCount = 12;
+constexpr int kRecentReadingDayCount = 7;
 constexpr uint8_t kMediumReadingMinutes = 15;
 constexpr uint8_t kHighReadingMinutes = 30;
 
@@ -807,9 +808,9 @@ void renderReadingRhythmPage(GfxRenderer& renderer, const MappedInputManager* ma
   const int rowStride = compactWidth ? 24 : 27;
   const int activeDotSize = compactWidth ? 12 : 14;
   const int inactiveDotSize = compactWidth ? 5 : 6;
-  const int legendH = 42;
+  const int recentDaysH = 42;
   const int chartTitleH = kCompactLayout.sectionTitleH;
-  const int rhythmCardH = titleH + monthLabelH + rowStride * 7 + legendH + cardPadding;
+  const int rhythmCardH = titleH + monthLabelH + rowStride * 7 + recentDaysH + cardPadding;
   const int chartGap = compactWidth ? 10 : 18;
   const int weeklyChartH = chartTitleH + (compactWidth ? 86 : 98);
   const int monthlyChartH = weeklyChartH;
@@ -887,30 +888,34 @@ void renderReadingRhythmPage(GfxRenderer& renderer, const MappedInputManager* ma
     }
   }
 
-  const int legendCenterY = gridTop + rowStride * 7 + legendH / 2;
-  const int legendTextY = legendCenterY - renderer.getLineHeight(SMALL_FONT_ID) / 2;
-  int legendX = cardX + cardPadding;
-  renderer.drawText(SMALL_FONT_ID, legendX, legendTextY, tr(STR_STATS_ACTIVE_DAY));
-  legendX += renderer.getTextWidth(SMALL_FONT_ID, tr(STR_STATS_ACTIVE_DAY)) + 9;
+  const int recentDaysY = gridTop + rowStride * 7;
+  renderer.drawLine(cardX, recentDaysY, cardX + cardW, recentDaysY);
+  const int recentDayW = std::max(1, (cardW - cardPadding * 2) / kRecentReadingDayCount);
+  const int recentDayLabelY = recentDaysY + 5;
+  const int recentDayValueY = recentDayLabelY + renderer.getLineHeight(SMALL_FONT_ID) + 2;
+  const uint32_t firstRecentDay = displayDay >= kRecentReadingDayCount - 1
+                                      ? displayDay - static_cast<uint32_t>(kRecentReadingDayCount - 1)
+                                      : 0;
+  for (int day = 0; day < kRecentReadingDayCount; ++day) {
+    const uint32_t dayIndex = firstRecentDay + static_cast<uint32_t>(day);
+    const int columnX = cardX + cardPadding + day * recentDayW;
+    ReadingStatsDate date;
+    if (!readingStatsDateFromDayIndex(dayIndex, date)) {
+      continue;
+    }
 
-  constexpr std::array<uint8_t, 3> legendMinutes = {1, kMediumReadingMinutes, kHighReadingMinutes};
-  constexpr std::array<const char*, 3> legendLabels = {"1", "15", "30+"};
-  for (size_t i = 0; i < legendMinutes.size(); ++i) {
-    int dotSize = inactiveDotSize;
-    Color dotColor = Color::LightGray;
-    readingIntensityStyle(legendMinutes[i], activeDotSize, inactiveDotSize, dotSize, dotColor);
-    renderer.fillRoundedRect(legendX, legendCenterY - dotSize / 2, dotSize, dotSize, dotSize / 2, dotColor);
-    legendX += dotSize + 4;
-    renderer.drawText(SMALL_FONT_ID, legendX, legendTextY, legendLabels[i]);
-    legendX += renderer.getTextWidth(SMALL_FONT_ID, legendLabels[i]) + 8;
+    if (hasToday && dayIndex == displayDay) {
+      renderer.drawRoundedRect(columnX + 2, recentDaysY + 3, recentDayW - 4, recentDaysH - 6, 1, 4, true);
+    }
+
+    const uint8_t dayOfWeek = readingStatsDayOfWeekIndex(date);
+    drawCenteredLabel(renderer, SMALL_FONT_ID, columnX, recentDayW, recentDayLabelY,
+                      I18N.get(DAY_LABELS[dayOfWeek]));
+
+    char duration[16];
+    formatRhythmMinutes(dailyHistory.minutesOnDay(dayIndex), duration, sizeof(duration));
+    drawCenteredLabel(renderer, SMALL_FONT_ID, columnX, recentDayW, recentDayValueY, duration);
   }
-
-  const int todayRingSize = activeDotSize + 6;
-  const int todayLegendW = todayRingSize + 6 + renderer.getTextWidth(SMALL_FONT_ID, tr(STR_STATS_TODAY));
-  const int todayLegendX = cardX + cardW - cardPadding - todayLegendW;
-  renderer.drawRoundedRect(todayLegendX, legendCenterY - todayRingSize / 2, todayRingSize, todayRingSize, 2,
-                           todayRingSize / 2, true);
-  renderer.drawText(SMALL_FONT_ID, todayLegendX + todayRingSize + 6, legendTextY, tr(STR_STATS_TODAY));
 
   std::array<uint16_t, kReadingRhythmWeekCount> weeklyMinutes{};
   uint32_t previousWeeksMinutes = 0;

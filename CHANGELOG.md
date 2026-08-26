@@ -1,3 +1,44 @@
+## [v1.6.2-yacp] - 2026-08-26
+
+This release extends YACP to newer X3 production runs whose display uses a UC8279d controller instead of the
+original UC8253. The controller is detected directly from the display bus before normal SPI initialization on every
+boot, so an inconclusive read cannot persist the wrong driver. The UC8279d path has been validated successfully on a
+recent-production X3.
+
+### Added
+
+- Added a dedicated UC8279d display driver and automatic UC8253/UC8279d detection for newer X3 production runs,
+  preventing the blank or frozen display caused by driving the new controller as an original X3.
+- Added experimental runtime detection and driver selection for newer X4 UC8179 and UC8279 controller variants. These
+  paths are compiled into the shared X3/X4 firmware but have not yet been validated on matching X4 hardware.
+- Reading Rhythm now shows the exact reading time for each of the last seven days, making day-to-day comparisons
+  visible alongside the longer-term activity history.
+
+### Changed
+
+- Renamed Sunlight Fading Fix to Display Power Saving and enabled it by default for new settings. Multi-pass
+  grayscale refreshes now keep the display powered only until their final pass, avoiding intermediate power cycles.
+- Text anti-aliasing is now enabled by default for new settings and for the YACP first-run profile. Existing saved
+  preferences remain unchanged.
+- The original UC8253 X3 now performs one required startup clean instead of forcing another full synchronization on
+  the first real screen after the splash, removing that redundant long refresh while preserving the wake cleanup.
+
+### Fixed
+
+- Aligned X3 controller selection with CrossPoint's proven boot sequence: power rails are asserted first, the base X3
+  profile is selected before probing, retained RESET pin holds are released, and the live result is applied before
+  hardware SPI initialization.
+- Removed the experimental cached controller fallback, which could permanently select UC8253 after one failed probe
+  and keep the display frozen on a UC8279d X3.
+- Restored CrossInk's text anti-aliasing mapping for YACP: dark-gray and light-gray glyph edge pixels are written to
+  the same grayscale planes on X3 and X4, without the YACP-specific high-contrast reduction.
+- Corrected the original UC8253 X3 grayscale waveform so the white-to-black transition remains passive during the
+  gray nudge, reducing blotchy noise in gray areas.
+- Hardened X4 grayscale-to-black-and-white transitions and deep-sleep baseline handling so later differential
+  refreshes do not reuse grayscale planes as the previous black-and-white frame.
+- One-bit images and icons drawn at non-byte-aligned horizontal positions now land on the requested pixel instead of
+  shifting to the preceding eight-pixel boundary; widths not divisible by eight also retain their final pixels.
+
 ## [v1.6.1-yacp] - 2026-08-05
 
 ### Fixed

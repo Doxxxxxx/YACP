@@ -603,14 +603,12 @@ static void renderCharImpl(const GfxRenderer& renderer, GfxRenderer::RenderMode 
           if (renderMode == GfxRenderer::BW && bmpVal < 3) {
             // Black (also paints over the grays in BW mode)
             renderer.drawPixel(screenX, screenY, pixelState);
-          } else if (renderMode == GfxRenderer::GRAYSCALE_MSB &&
-                     (bmpVal == 2 || (bmpVal == 1 && !renderer.getHighContrastTextAntialiasing()))) {
+          } else if (renderMode == GfxRenderer::GRAYSCALE_MSB && (bmpVal == 1 || bmpVal == 2)) {
             // Light gray (also mark the MSB if it's going to be a dark gray too)
             // Dedicated X3 gray LUTs now provide proper 4-level gray on both devices
             // We have to flag pixels in reverse for the gray buffers, as 0 leave alone, 1 update
             renderer.drawPixel(screenX, screenY, false);
-          } else if (renderMode == GfxRenderer::GRAYSCALE_LSB && bmpVal == 1 &&
-                     !renderer.getHighContrastTextAntialiasing()) {
+          } else if (renderMode == GfxRenderer::GRAYSCALE_LSB && bmpVal == 1) {
             // Dark gray
             renderer.drawPixel(screenX, screenY, false);
           }
@@ -1976,7 +1974,13 @@ void GfxRenderer::invertScreen() const {
 void GfxRenderer::displayBuffer(const HalDisplay::RefreshMode refreshMode, const bool turnOffScreen) const {
   auto elapsed = millis() - start_ms;
   LOG_DBG("GFX", "Time = %lu ms from clearScreen to displayBuffer", elapsed);
-  display.displayBuffer(refreshMode, fadingFix || turnOffScreen);
+  display.displayBuffer(refreshMode, displayPowerSaving || turnOffScreen);
+}
+
+void GfxRenderer::displayBufferIntermediate(const HalDisplay::RefreshMode refreshMode) const {
+  auto elapsed = millis() - start_ms;
+  LOG_DBG("GFX", "Time = %lu ms from clearScreen to intermediate displayBuffer", elapsed);
+  display.displayBuffer(refreshMode, false);
 }
 
 std::string GfxRenderer::truncatedText(const int fontId, const char* text, const int maxWidth,
@@ -2463,7 +2467,11 @@ size_t GfxRenderer::getBufferSize() const { return frameBufferSize; }
 // void GfxRenderer::grayscaleRevert() const { display.grayscaleRevert(); }
 
 void GfxRenderer::displayGrayscaleBase(HalDisplay::RefreshMode fallback, const bool turnOffScreen) const {
-  display.displayGrayscaleBase(fallback, fadingFix || turnOffScreen);
+  display.displayGrayscaleBase(fallback, displayPowerSaving || turnOffScreen);
+}
+
+void GfxRenderer::displayGrayscaleBaseIntermediate(HalDisplay::RefreshMode fallback) const {
+  display.displayGrayscaleBase(fallback, false);
 }
 
 void GfxRenderer::preconditionGrayscale() const { display.preconditionGrayscale(); }
@@ -2491,7 +2499,7 @@ void GfxRenderer::copyGrayscaleLsbBuffers() const { display.copyGrayscaleLsbBuff
 void GfxRenderer::copyGrayscaleMsbBuffers() const { display.copyGrayscaleMsbBuffers(frameBuffer); }
 
 void GfxRenderer::displayGrayBuffer(const bool turnOffScreen) const {
-  display.displayGrayBuffer(fadingFix || turnOffScreen);
+  display.displayGrayBuffer(displayPowerSaving || turnOffScreen);
 }
 
 void GfxRenderer::writeGrayscalePlaneStrip(bool lsbPlane, const uint8_t* scratch, int yStart, int numRows) const {

@@ -62,7 +62,7 @@ void ButtonLayoutSetupActivity::applySelection() {
     SETTINGS.quickResumeSleepScreen = CrossPointSettings::QUICK_RESUME_AFTER_TIMEOUT;
     SETTINGS.refreshFrequency = CrossPointSettings::REFRESH_1;
     SETTINGS.refreshAction = CrossPointSettings::REFRESH_ACTION_BW_REINFORCEMENT;
-    SETTINGS.textAntiAliasing = 0;
+    SETTINGS.textAntiAliasing = 1;
     SETTINGS.sleepTimeoutMinutes = 5;
   } else if (selectedLayout == Layout::CrossInk) {
     // CrossInk-compatible physical order: Back, Confirm, Left, Right.
@@ -130,7 +130,7 @@ void ButtonLayoutSetupActivity::render(RenderLock&&) {
     detailRows.emplace_back(tr(STR_BUTTON_LAYOUT_YACP_POWER_HELP));
     detailRows.emplace_back(std::string(tr(STR_SHORT_PWR_BTN)) + ": " + tr(STR_SLEEP) + " · " +
                             tr(STR_LONG_PRESS_ACTION) + ": " + tr(STR_FORCE_REFRESH));
-    detailRows.emplace_back(std::string(tr(STR_TEXT_AA)) + ": " + tr(STR_NO));
+    detailRows.emplace_back(std::string(tr(STR_TEXT_AA)) + ": " + tr(STR_YES));
   } else if (selectedLayout == Layout::CrossInk) {
     detailRows.emplace_back(std::string(tr(STR_SHORT_PWR_BTN)) + ": " + tr(STR_IGNORE) + " · " +
                             tr(STR_LONG_PRESS_ACTION) + ": " + tr(STR_SLEEP));

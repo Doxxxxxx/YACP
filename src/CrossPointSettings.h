@@ -351,7 +351,7 @@ class CrossPointSettings {
   // Text rendering settings
   uint8_t extraParagraphSpacing = 1;
   uint8_t forceParagraphIndents = 0;
-  uint8_t textAntiAliasing = 0;
+  uint8_t textAntiAliasing = 1;
   uint8_t readerDarkMode = 0;
   // Short power button action behaviour
   uint8_t shortPwrBtn = IGNORE;
@@ -425,8 +425,8 @@ class CrossPointSettings {
   uint8_t uiTheme = DEFAULT_UI_THEME;
   // Recent Books screen layout
   uint8_t recentBooksView = RECENT_BOOKS_LIST;
-  // Sunlight fading compensation
-  uint8_t fadingFix = 0;
+  // Power down the display's analog supply after the final refresh pass.
+  uint8_t displayPowerSaving = 1;
   // Quick-return from footnotes when a footnote shortcut is active.
   uint8_t pwrBtnFootnoteBack = 1;
   // Use book's embedded CSS styles for EPUB rendering (1 = enabled, 0 = disabled)

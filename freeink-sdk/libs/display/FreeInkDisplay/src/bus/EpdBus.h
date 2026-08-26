@@ -61,6 +61,12 @@ class EpdBus {
   void waitBusy(const char* tag = nullptr);
   void waitBusy(BusyPolarity p, const char* tag = nullptr);
 
+  // Like waitBusy(), but sleeps the calling task on a BUSY-edge interrupt and
+  // wakes exactly on the completion edge instead of polling every 1 ms. For the
+  // refresh-completion wait: it confirms the waveform is running (short bounded
+  // poll) before arming, so it is safe to call right after firing the refresh.
+  void waitRefreshComplete(const char* tag = nullptr);
+
   // Instantaneous BUSY-pin read for non-blocking refresh polling. X3's
   // two-phase wait can't be captured in a single read; its terminal state is
   // HIGH, so LOW reports busy (X3 drivers don't use the async path today).
@@ -87,10 +93,6 @@ class EpdBus {
   // to the plain delay. Lets host firmware sleep through the 0.3-2 s refresh
   // instead of polling, without the SDK knowing the wake mechanics.
   void setBusyWaitSliceHook(bool (*sliceHook)(int8_t busyPin, uint8_t busyLevel)) { _busyWaitSliceHook = sliceHook; }
-
-  // Stream `plane` bottom-to-top (gates are physically reversed), widthBytes per
-  // row, optionally bit-inverting. Replaces the per-driver mirror lambdas.
-  void writeMirroredPlane(const uint8_t* plane, uint16_t height, uint16_t widthBytes, bool invert);
 
   // Send `ramCmd` then `plane` Y-flipped (gate order, bottom row first) as ONE
   // CS-low data burst — required by UC8253 DTM writes which must not toggle CS

@@ -533,7 +533,7 @@ bool CrossPointSettings::loadFromBinaryFile() {
     readAndValidate(inputFile, frontButtonRight, FRONT_BUTTON_HARDWARE_COUNT);
     frontButtonMappingRead = true;
     if (++settingsRead >= fileSettingsCount) break;
-    serialization::readPod(inputFile, fadingFix);
+    serialization::readPod(inputFile, displayPowerSaving);
     if (++settingsRead >= fileSettingsCount) break;
     serialization::readPod(inputFile, embeddedStyle);
     if (++settingsRead >= fileSettingsCount) break;

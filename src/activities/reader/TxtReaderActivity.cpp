@@ -620,9 +620,7 @@ void TxtReaderActivity::renderPage() {
   ReaderUtils::displayWithRefreshCycle(renderer, pagesUntilFullRefresh);
 
   if (needsTextGrayscale) {
-    const bool highContrastText =
-        gpio.deviceIsX3() && SETTINGS.refreshAction == CrossPointSettings::REFRESH_ACTION_BW_REINFORCEMENT;
-    ReaderUtils::renderAntiAliased(renderer, [&renderLines]() { renderLines(); }, highContrastText);
+    ReaderUtils::renderAntiAliased(renderer, [&renderLines]() { renderLines(); });
   }
   // scope destructor clears font cache via FontCacheManager
 }

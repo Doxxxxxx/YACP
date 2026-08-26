@@ -1,8 +1,10 @@
+#include <BoardConfig.h>
 #include <HalGPIO.h>
 #include <Logging.h>
 #include <Preferences.h>
 #include <SPI.h>
 #include <Wire.h>
+#include <XteinkDetect.h>
 #include <esp_sleep.h>
 
 // Global HalGPIO instance
@@ -192,15 +194,25 @@ HalGPIO::DeviceType detectDeviceTypeWithFingerprint() {
 }  // namespace
 
 void HalGPIO::begin() {
-  inputMgr.begin();
-  SPI.begin(EPD_SCLK, SPI_MISO, EPD_MOSI, EPD_CS);
-
 #ifdef FORCE_DEVICE_X3
   _deviceType = DeviceType::X3;
   LOG_INF("HW", "Device override active via build flag: X3");
 #else
   _deviceType = detectDeviceTypeWithFingerprint();
 #endif
+
+  BoardConfig::selectDevice(deviceIsX3() ? BoardConfig::Board::XteinkX3 : BoardConfig::Board::XteinkX4);
+
+  // Resolve the per-batch controller before SPI owns the display pins. The
+  // live bus probe is authoritative because a full flash can replace the OEM
+  // NVS calibration with values from another unit.
+  freeink::applyXteinkDisplayController();
+  if (deviceIsX3() && BoardConfig::ACTIVE.displayController == BoardConfig::DisplayController::UC8279) {
+    BoardConfig::selectDevice(BoardConfig::Board::XteinkX3Uc8279);
+  }
+
+  SPI.begin(EPD_SCLK, SPI_MISO, EPD_MOSI, EPD_CS);
+  inputMgr.begin();
 
   if (deviceIsX4()) {
     pinMode(BAT_GPIO0, INPUT);
