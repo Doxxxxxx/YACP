@@ -1,9 +1,9 @@
-## [v1.6.2-yacp.19] - 2026-08-23
+## [v1.6.2-yacp] - 2026-08-26
 
-This pre-release extends YACP to newer X3 production runs whose display uses a UC8279d controller instead of the
+This release extends YACP to newer X3 production runs whose display uses a UC8279d controller instead of the
 original UC8253. The controller is detected directly from the display bus before normal SPI initialization on every
-boot, so an inconclusive read cannot persist the wrong driver. The UC8279d path is included for hardware validation
-and should still be treated as experimental.
+boot, so an inconclusive read cannot persist the wrong driver. The UC8279d path has been validated successfully on a
+recent-production X3.
 
 ### Added
 
