@@ -212,11 +212,10 @@ void Uc8279Driver::skipInitialResync() {
 }
 
 void Uc8279Driver::deepSleep(EpdBus& bus) {
-  if (_isScreenOn) {
-    bus.cmd(CMD_POWER_OFF);
-    bus.waitBusy(" 8279 power-down");
-    _isScreenOn = false;
-  }
+  // Always park the booster before DSLP, but only wait when it was active.
+  bus.cmd(CMD_POWER_OFF);
+  if (_isScreenOn) bus.waitBusy(" 8279 power-down");
+  _isScreenOn = false;
   bus.cmd(CMD_DEEP_SLEEP);
   bus.data(0xA5);
 }

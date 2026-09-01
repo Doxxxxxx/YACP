@@ -19,24 +19,22 @@ OtaUpdater::OtaUpdaterError OtaUpdater::installUpdate(ProgressCallback, void*, s
 #include "esp_http_client.h"
 #include "esp_ota_ops.h"
 #include "mbedtls/sha256.h"
+#include "network/OtaReleaseAsset.h"
 #include "network/WifiPowerSaveGuard.h"
 
 namespace {
 #ifndef CROSSINK_OTA_RELEASE_URL
-#define CROSSINK_OTA_RELEASE_URL "https://api.github.com/repos/uxjulia/CrossInk/releases/latest"
+#define CROSSINK_OTA_RELEASE_URL "https://api.github.com/repos/Sichroteph/YACP/releases/latest"
 #endif
 
 constexpr char latestReleaseUrl[] = CROSSINK_OTA_RELEASE_URL;
 
 #ifdef CROSSPOINT_FIRMWARE_VARIANT
-constexpr char firmwareAssetStem[] = "firmware-" CROSSPOINT_FIRMWARE_VARIANT;
-constexpr char firmwareAssetName[] = "firmware-" CROSSPOINT_FIRMWARE_VARIANT ".bin";
+constexpr char firmwareAssetSuffix[] = "-" CROSSPOINT_FIRMWARE_VARIANT ".bin";
 #else
-constexpr char firmwareAssetStem[] = "firmware";
-constexpr char firmwareAssetName[] = "firmware.bin";
+constexpr char firmwareAssetSuffix[] = ".bin";
 #endif
 
-constexpr char binSuffix[] = ".bin";
 constexpr size_t VERSION_SEGMENT_COUNT = 4;
 constexpr size_t OTA_PROGRESS_UPDATE_BYTES = 64 * 1024;
 constexpr int OTA_HTTP_READ_TIMEOUT_MS = 5000;
@@ -229,20 +227,8 @@ void formatSha256(const uint8_t digest[32], char output[65]) {
 
 bool isHttpUrl(const std::string& url) { return url.rfind("http://", 0) == 0; }
 
-bool endsWith(const char* value, const char* suffix) {
-  if (value == nullptr || suffix == nullptr) return false;
-  const size_t valueLength = strlen(value);
-  const size_t suffixLength = strlen(suffix);
-  if (suffixLength > valueLength) return false;
-  return strcmp(value + valueLength - suffixLength, suffix) == 0;
-}
-
 bool isMatchingFirmwareAssetName(const char* assetName) {
-  if (assetName == nullptr) return false;
-  if (strcmp(assetName, firmwareAssetName) == 0) return true;
-  if (!startsWith(assetName, firmwareAssetStem)) return false;
-  if (assetName[strlen(firmwareAssetStem)] != '-') return false;
-  return endsWith(assetName, binSuffix);
+  return OtaReleaseAsset::matchesYacpFirmware(assetName, firmwareAssetSuffix);
 }
 
 /*
@@ -376,9 +362,22 @@ OtaUpdater::OtaUpdaterError OtaUpdater::checkForUpdate() {
 
   latestVersion = releaseParser.getTagName();
 
-  if (!releaseParser.foundFirmware()) {
-    LOG_ERR("OTA", "No matching %s asset found for release %s", firmwareAssetStem, latestVersion.c_str());
+  const ParsedVersion parsedLatestVersion = parseVersion(latestVersion.c_str());
+  const ParsedVersion parsedCurrentVersion = parseVersion(CROSSINK_VERSION);
+  if (!parsedLatestVersion.valid || !parsedCurrentVersion.valid) {
+    LOG_ERR("OTA", "Invalid version in update manifest: latest=%s current=%s", latestVersion.c_str(),
+            CROSSINK_VERSION);
+    return JSON_PARSE_ERROR;
+  }
+
+  if (compareVersions(latestVersion.c_str(), CROSSINK_VERSION) <= 0) {
+    LOG_DBG("OTA", "No newer YACP release: latest=%s current=%s", latestVersion.c_str(), CROSSINK_VERSION);
     return NO_UPDATE;
+  }
+
+  if (!releaseParser.foundFirmware()) {
+    LOG_ERR("OTA", "No YACP asset ending in %s found for release %s", firmwareAssetSuffix, latestVersion.c_str());
+    return JSON_PARSE_ERROR;
   }
 
   otaUrl = releaseParser.getFirmwareUrl();

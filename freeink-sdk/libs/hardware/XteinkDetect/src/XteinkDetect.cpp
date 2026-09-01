@@ -226,13 +226,27 @@ DisplayControllerVerdict probeDisplayController(const EpdProbePins& p, uint8_t v
   // VER = FF FF FF FF FF (blank/unreadable LUT_VER area) with FLG = 0x13 (the
   // datasheet's idle default), which the uniform-VER floating-bus test wrongly
   // rejects. A pulled-up floating bus also reads FF — so require POSITIVE
-  // evidence: the RMTP dump must start with the 0xA5 MTP key, which only a
-  // real UC81xx with a programmed MTP can produce (and without which OTP-mode
-  // refreshes wouldn't run anyway). UC8253 has no RMTP command; its read
-  // floats and can never match.
-  if (!confirmed && flgDriven && verAgree && verIsFloating(ver1) && ver1[0] == 0xFF && g_probeDiag.mtpValid &&
-      g_probeDiag.mtp[0] == 0xA5) {
-    confirmed = true;
+  // evidence from RMTP. A programmed MTP starts with the unambiguous 0xA5 key.
+  // Some field UC8279d modules instead have a blank MTP whose non-uniform dump
+  // is still driven and reproducible. UC8253 has no RMTP command, so its read
+  // normally floats to a uniform value; one noisy dump is not enough to match.
+  if (!confirmed && flgDriven && verAgree && verIsFloating(ver1) && ver1[0] == 0xFF && g_probeDiag.mtpValid) {
+    if (g_probeDiag.mtp[0] == 0xA5) {
+      confirmed = true;
+    } else {
+      bool uniform = true;
+      for (size_t i = 1; i < sizeof(g_probeDiag.mtp); i++) {
+        if (g_probeDiag.mtp[i] != g_probeDiag.mtp[0]) {
+          uniform = false;
+          break;
+        }
+      }
+      if (!uniform) {
+        uint8_t raw2[sizeof(g_probeDiag.mtp) + 1] = {0};
+        epdCmdRead(p, UC81XX_CMD_RMTP, raw2, sizeof(raw2));
+        if (memcmp(g_probeDiag.mtp, raw2 + 1, sizeof(g_probeDiag.mtp)) == 0) confirmed = true;
+      }
+    }
   }
   releaseDisplayPins(p);
 

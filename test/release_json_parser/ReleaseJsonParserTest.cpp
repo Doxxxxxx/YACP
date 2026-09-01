@@ -4,6 +4,7 @@
 #include <string>
 
 #include "lib/JsonParser/ReleaseJsonParser.h"
+#include "src/network/OtaReleaseAsset.h"
 
 static int testsPassed = 0;
 static int testsFailed = 0;
@@ -160,6 +161,14 @@ static void feedChunked(ReleaseJsonParser& p, const char* json, size_t chunkSize
 }
 
 static bool isTinyFirmwareAsset(const char* assetName) { return strcmp(assetName, "firmware-tiny-v2.4.1.bin") == 0; }
+
+static bool isYacpTinyFirmwareAsset(const char* assetName) {
+  return OtaReleaseAsset::matchesYacpFirmware(assetName, "-tiny.bin");
+}
+
+static bool isYacpXlargeFirmwareAsset(const char* assetName) {
+  return OtaReleaseAsset::matchesYacpFirmware(assetName, "-xlarge.bin");
+}
 
 // ============================================================================
 // Tests
@@ -407,6 +416,41 @@ void testCustomAssetMatcher() {
   ASSERT_STREQ(p.getTagName(), "v2.4.1");
   ASSERT_STREQ(p.getFirmwareUrl(), "https://example.com/tiny.bin");
   ASSERT_EQ(p.getFirmwareSize(), 4321u);
+
+  printf("  passed\n");
+  PASS();
+}
+
+void testYacpReleaseAssetMatchers() {
+  printf("testYacpReleaseAssetMatchers...\n");
+
+  const char* json = R"({
+      "tag_name": "v1.6.2-yacp",
+      "assets": [
+        {"name": "SHA256SUMS.txt", "browser_download_url": "https://example.com/SHA256SUMS.txt", "size": 188},
+        {"name": "YACP-1.6.2-yacp-tiny.bin", "digest": "sha256:a415811f29a348f0a06c38303acc726102c006f7db6745e18aa2399555716043", "browser_download_url": "https://example.com/YACP-1.6.2-yacp-tiny.bin", "size": 5610784},
+        {"name": "YACP-1.6.2-yacp-xlarge.bin", "digest": "sha256:4679d63bce82198b66bd284dedfce8618a4afd2148ec83210976d9971eac1cdc", "browser_download_url": "https://example.com/YACP-1.6.2-yacp-xlarge.bin", "size": 5473696}
+      ]
+    })";
+
+  ReleaseJsonParser tinyParser(isYacpTinyFirmwareAsset);
+  tinyParser.feed(json, strlen(json));
+  ASSERT_TRUE(tinyParser.foundFirmware());
+  ASSERT_STREQ(tinyParser.getFirmwareUrl(), "https://example.com/YACP-1.6.2-yacp-tiny.bin");
+  ASSERT_EQ(tinyParser.getFirmwareSize(), 5610784u);
+  ASSERT_STREQ(tinyParser.getFirmwareSha256(),
+               "a415811f29a348f0a06c38303acc726102c006f7db6745e18aa2399555716043");
+
+  ReleaseJsonParser xlargeParser(isYacpXlargeFirmwareAsset);
+  xlargeParser.feed(json, strlen(json));
+  ASSERT_TRUE(xlargeParser.foundFirmware());
+  ASSERT_STREQ(xlargeParser.getFirmwareUrl(), "https://example.com/YACP-1.6.2-yacp-xlarge.bin");
+  ASSERT_EQ(xlargeParser.getFirmwareSize(), 5473696u);
+  ASSERT_STREQ(xlargeParser.getFirmwareSha256(),
+               "4679d63bce82198b66bd284dedfce8618a4afd2148ec83210976d9971eac1cdc");
+
+  ASSERT_TRUE(!OtaReleaseAsset::matchesYacpFirmware("firmware-tiny.bin", "-tiny.bin"));
+  ASSERT_TRUE(!OtaReleaseAsset::matchesYacpFirmware("YACP-1.6.2-yacp-xlarge.bin", "-tiny.bin"));
 
   printf("  passed\n");
   PASS();
@@ -912,6 +956,7 @@ int main() {
   testFirmwareGithubDigestSha256();
   testFirmwareNonSha256DigestIgnored();
   testCustomAssetMatcher();
+  testYacpReleaseAssetMatchers();
   testAssetsBeforeTagName();
   testChunkedFeedingRealisticSmallChunks();
   testChunkedFeedingByteByByte();

@@ -67,6 +67,22 @@ bool sleepCoverFilterInvertsGeneratedScreen() {
   return SETTINGS.sleepScreenCoverFilter == CrossPointSettings::SLEEP_SCREEN_COVER_FILTER::INVERTED_BLACK_AND_WHITE;
 }
 
+bool sleepImageUsesGrayscale() {
+  return SETTINGS.sleepScreenCoverFilter == CrossPointSettings::SLEEP_SCREEN_COVER_FILTER::ADAPTIVE_GRAYSCALE ||
+         SETTINGS.sleepScreenCoverFilter == CrossPointSettings::SLEEP_SCREEN_COVER_FILTER::CROSSPOINT_ORIGINAL;
+}
+
+bool sleepImageUsesAdaptiveTone() {
+  return SETTINGS.sleepScreenCoverFilter == CrossPointSettings::SLEEP_SCREEN_COVER_FILTER::ADAPTIVE_GRAYSCALE;
+}
+
+BitmapToneMapping sleepImageToneMapping() {
+  if (SETTINGS.sleepScreenCoverFilter == CrossPointSettings::SLEEP_SCREEN_COVER_FILTER::CROSSPOINT_ORIGINAL) {
+    return BitmapToneMapping::Legacy;
+  }
+  return sleepImageUsesAdaptiveTone() ? BitmapToneMapping::Adaptive : BitmapToneMapping::Native;
+}
+
 uint32_t fnv1a32Update(uint32_t hash, const uint8_t* data, const size_t len) {
   for (size_t i = 0; i < len; i++) {
     hash ^= data[i];
@@ -642,9 +658,9 @@ void SleepActivity::renderCustomSleepScreen() const {
   if (selectPinnedSleepImage(SleepImageMode::Custom, selection) ||
       selectRandomSleepImage(SleepImageMode::Custom, selection)) {
     SleepImageRenderCache renderCache;
-    const bool shouldUseAdaptiveTone =
-        SETTINGS.sleepScreenCoverFilter == CrossPointSettings::SLEEP_SCREEN_COVER_FILTER::NO_FILTER;
-    const bool hasRenderCache = shouldUseAdaptiveTone && buildSleepImageRenderCache(selection.path, renderer, renderCache);
+    const bool shouldUseAdaptiveTone = sleepImageUsesAdaptiveTone();
+    const bool hasRenderCache =
+        shouldUseAdaptiveTone && buildSleepImageRenderCache(selection.path, renderer, renderCache);
     if (hasRenderCache && tryRenderCachedSleepImage(renderCache, renderer)) {
       return;
     }
@@ -653,7 +669,7 @@ void SleepActivity::renderCustomSleepScreen() const {
     if (Storage.openFileForRead("SLP", selection.path, file)) {
       LOG_INF("SLP", "Loading custom sleep image: %s", selection.path.c_str());
       delay(100);
-      Bitmap bitmap(file, true, shouldUseAdaptiveTone ? BitmapToneMapping::Adaptive : BitmapToneMapping::Native);
+      Bitmap bitmap(file, true, sleepImageToneMapping());
       if (bitmap.parseHeaders() == BmpReaderError::Ok) {
         if (shouldUseAdaptiveTone) {
           bitmap.analyzeAdaptiveToneMapping();
@@ -672,15 +688,15 @@ void SleepActivity::renderCustomSleepScreen() const {
   FsFile file;
   constexpr char ROOT_SLEEP_BMP[] = "/sleep.bmp";
   SleepImageRenderCache renderCache;
-  const bool shouldUseAdaptiveTone =
-      SETTINGS.sleepScreenCoverFilter == CrossPointSettings::SLEEP_SCREEN_COVER_FILTER::NO_FILTER;
-  const bool hasRenderCache = shouldUseAdaptiveTone && buildSleepImageRenderCache(ROOT_SLEEP_BMP, renderer, renderCache);
+  const bool shouldUseAdaptiveTone = sleepImageUsesAdaptiveTone();
+  const bool hasRenderCache =
+      shouldUseAdaptiveTone && buildSleepImageRenderCache(ROOT_SLEEP_BMP, renderer, renderCache);
   if (hasRenderCache && tryRenderCachedSleepImage(renderCache, renderer)) {
     return;
   }
 
   if (Storage.openFileForRead("SLP", ROOT_SLEEP_BMP, file)) {
-    Bitmap bitmap(file, true, shouldUseAdaptiveTone ? BitmapToneMapping::Adaptive : BitmapToneMapping::Native);
+    Bitmap bitmap(file, true, sleepImageToneMapping());
     if (bitmap.parseHeaders() == BmpReaderError::Ok) {
       LOG_DBG("SLP", "Loading: /sleep.bmp");
       if (shouldUseAdaptiveTone) {
@@ -710,8 +726,7 @@ bool SleepActivity::renderBookGallerySleepScreen() const {
   }
 
   SleepImageRenderCache renderCache;
-  const bool shouldUseAdaptiveTone =
-      SETTINGS.sleepScreenCoverFilter == CrossPointSettings::SLEEP_SCREEN_COVER_FILTER::NO_FILTER;
+  const bool shouldUseAdaptiveTone = sleepImageUsesAdaptiveTone();
   const bool hasRenderCache = shouldUseAdaptiveTone && buildSleepImageRenderCache(imagePath, renderer, renderCache);
   if (hasRenderCache && tryRenderCachedSleepImage(renderCache, renderer)) {
     return true;
@@ -724,7 +739,7 @@ bool SleepActivity::renderBookGallerySleepScreen() const {
   }
 
   LOG_INF("SLP", "Rendering book gallery sleep image: %s", imagePath.c_str());
-  Bitmap bitmap(file, true, shouldUseAdaptiveTone ? BitmapToneMapping::Adaptive : BitmapToneMapping::Native);
+  Bitmap bitmap(file, true, sleepImageToneMapping());
   if (bitmap.parseHeaders() != BmpReaderError::Ok) {
     LOG_ERR("SLP", "Failed to parse book gallery sleep BMP: %s", imagePath.c_str());
     file.close();
@@ -807,8 +822,7 @@ void SleepActivity::renderBitmapSleepScreen(const Bitmap& bitmap, const SleepIma
   LOG_DBG("SLP", "drawing to %d x %d", x, y);
   renderer.clearScreen();
 
-  const bool hasGreyscale = bitmap.hasGreyscale() &&
-                            SETTINGS.sleepScreenCoverFilter == CrossPointSettings::SLEEP_SCREEN_COVER_FILTER::NO_FILTER;
+  const bool hasGreyscale = bitmap.hasGreyscale() && sleepImageUsesGrayscale();
   FsFile cacheFile;
   const bool shouldWriteRenderCache = hasGreyscale && renderCache != nullptr;
 
@@ -881,7 +895,7 @@ void SleepActivity::renderCoverSleepScreen() const {
 
   FsFile file;
   if (Storage.openFileForRead("SLP", coverBmpPath, file)) {
-    Bitmap bitmap(file);
+    Bitmap bitmap(file, false, sleepImageToneMapping());
     if (bitmap.parseHeaders() == BmpReaderError::Ok) {
       LOG_DBG("SLP", "Rendering sleep cover: %s", coverBmpPath.c_str());
       renderBitmapSleepScreen(bitmap);

@@ -44,9 +44,10 @@ class CrossPointSettings {
   };
   enum SLEEP_SCREEN_COVER_MODE { FIT = 0, CROP = 1, SLEEP_SCREEN_COVER_MODE_COUNT };
   enum SLEEP_SCREEN_COVER_FILTER {
-    NO_FILTER = 0,
+    ADAPTIVE_GRAYSCALE = 0,
     BLACK_AND_WHITE = 1,
     INVERTED_BLACK_AND_WHITE = 2,
+    CROSSPOINT_ORIGINAL = 3,
     SLEEP_SCREEN_COVER_FILTER_COUNT
   };
 
@@ -321,7 +322,7 @@ class CrossPointSettings {
   // Sleep screen cover mode settings
   uint8_t sleepScreenCoverMode = FIT;
   // Sleep screen cover filter
-  uint8_t sleepScreenCoverFilter = NO_FILTER;
+  uint8_t sleepScreenCoverFilter = ADAPTIVE_GRAYSCALE;
   // Status bar settings (statusBar retained for migration only)
   uint8_t statusBar = FULL;
   uint8_t statusBarChapterPageCount = 1;

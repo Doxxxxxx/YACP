@@ -12,6 +12,7 @@
 #include "AppVersion.h"
 #include "CrossPointSettings.h"
 #include "HalDisplay.h"
+#include "HalGPIO.h"
 #include "MappedInputManager.h"
 #include "activities/ActivityManager.h"
 #include "components/UITheme.h"
@@ -60,8 +61,13 @@ void ButtonLayoutSetupActivity::applySelection() {
     SETTINGS.shortPwrBtn = CrossPointSettings::SLEEP;
     SETTINGS.longPwrBtn = CrossPointSettings::FORCE_REFRESH;
     SETTINGS.quickResumeSleepScreen = CrossPointSettings::QUICK_RESUME_AFTER_TIMEOUT;
-    SETTINGS.refreshFrequency = CrossPointSettings::REFRESH_1;
-    SETTINGS.refreshAction = CrossPointSettings::REFRESH_ACTION_BW_REINFORCEMENT;
+    if (gpio.deviceIsX3()) {
+      SETTINGS.refreshFrequency = CrossPointSettings::REFRESH_1;
+      SETTINGS.refreshAction = CrossPointSettings::REFRESH_ACTION_BW_REINFORCEMENT;
+    } else {
+      SETTINGS.refreshFrequency = CrossPointSettings::REFRESH_30;
+      SETTINGS.refreshAction = CrossPointSettings::REFRESH_ACTION_FULL;
+    }
     SETTINGS.textAntiAliasing = 1;
     SETTINGS.sleepTimeoutMinutes = 5;
   } else if (selectedLayout == Layout::CrossInk) {
@@ -74,6 +80,16 @@ void ButtonLayoutSetupActivity::applySelection() {
     SETTINGS.longPwrBtn = CrossPointSettings::SLEEP;
   }
   // Layout::KeepCurrent deliberately leaves every existing setting intact.
+
+  // Older YACP presets stored the X3-only per-page reinforcement settings on
+  // X4 too. Preserve every other custom cadence, but repair that exact legacy
+  // preset so its unavailable X3 action cannot fall back to HALF every page.
+  if (gpio.deviceIsX4() && SETTINGS.refreshFrequency == CrossPointSettings::REFRESH_1 &&
+      SETTINGS.refreshAction == CrossPointSettings::REFRESH_ACTION_BW_REINFORCEMENT) {
+    LOG_INF("BLS", "Replacing legacy X3 refresh preset on X4");
+    SETTINGS.refreshFrequency = CrossPointSettings::REFRESH_30;
+    SETTINGS.refreshAction = CrossPointSettings::REFRESH_ACTION_FULL;
+  }
 
   static_assert(sizeof(CROSSINK_VERSION) <= CrossPointSettings::BUTTON_LAYOUT_PROMPT_VERSION_CAPACITY,
                 "CROSSINK_VERSION does not fit in buttonLayoutPromptVersion");
