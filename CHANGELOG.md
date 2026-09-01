@@ -1,3 +1,25 @@
+## [v1.6.3-yacp.2] - 2026-09-01
+
+This pre-release completes several corrections prepared around YACP 1.6.2 and hardens support for recent X3
+production runs.
+
+### Changed
+
+- Sleep image rendering now names its adaptive grayscale processing explicitly and offers a CrossPoint Original mode
+  for users who prefer the earlier, generally lighter tonal mapping. Existing saved choices keep their behavior.
+- The YACP setup profile now keeps X3's no-flash reinforcement on every page exclusive to X3. On X4 it uses the
+  normal 30-page full-clean cadence and repairs the exact legacy YACP refresh preset that could cause a strong refresh
+  on every page.
+
+### Fixed
+
+- Newer X3 UC8279d panels with blank MTP data are now recognized only when two non-uniform RMTP reads match exactly,
+  avoiding both missed hardware detection and false positives from a floating bus.
+- The UC8279d driver now always sends the display power-off command before deep sleep while waiting for BUSY only
+  when the panel was active.
+- Firmware Update now checks YACP releases, selects the matching Tiny or XLarge artifact, and reports an up-to-date
+  installation as no update instead of a failure.
+
 ## [v1.6.2-yacp] - 2026-08-26
 
 This release extends YACP to newer X3 production runs whose display uses a UC8279d controller instead of the
