@@ -16,7 +16,7 @@
  * 1. Connect to WiFi (if not connected)
  * 2. Calculate document hash
  * 3. Fetch remote progress
- * 4. Show comparison and options (Apply/Upload)
+ * 4. Show comparison and options (Apply/Upload), unless Smart sync resolves it
  * 5. Apply or upload progress
  */
 class KOReaderSyncActivity final : public Activity {
@@ -80,6 +80,10 @@ class KOReaderSyncActivity final : public Activity {
   // Selection in result screen (0=Apply, 1=Upload)
   int selectedOption = 0;
 
+  // Timed return after a Smart sync upload, so the confirmation does not need a key press.
+  unsigned long autoReturnAt = 0;
+  static constexpr unsigned long AUTO_RETURN_DELAY_MS = 1200;
+
   // Tracks whether this session activated WiFi. Set in onEnter past the credentials
   // check; checked in onExit to decide whether to silent-reboot. Can't rely on
   // WiFi.getMode() because performUpload() calls esp_wifi_stop() on the way out,
@@ -92,6 +96,8 @@ class KOReaderSyncActivity final : public Activity {
   void performUpload();
   bool consumeInitialConfirmRelease();
   void ensureEpubLoaded();
+  bool smartSyncEnabled() const;
+  void markAutoReturn();
   void saveProgressAndReturn(const CrossPointPosition& position);
   void returnToReader();
 };
