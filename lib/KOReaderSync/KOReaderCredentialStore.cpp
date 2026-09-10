@@ -15,6 +15,7 @@ void KOReaderCredentialStore::toJson(JsonDocument& doc) const {
   doc["password_obf"] = obfuscation::obfuscateToBase64(password);
   doc["serverUrl"] = serverUrl;
   doc["matchMethod"] = static_cast<uint8_t>(matchMethod);
+  doc["syncBehavior"] = static_cast<uint8_t>(syncBehavior);
 }
 
 bool KOReaderCredentialStore::loadFromFile() {
@@ -68,6 +69,15 @@ bool KOReaderCredentialStore::fromJson(JsonVariantConst doc) {
   } else {
     LOG_DBG("KRS", "Invalid matchMethod %u in JSON, resetting to FILENAME", method);
     setMatchMethod(DocumentMatchMethod::FILENAME);
+  }
+
+  // A missing key means an install from before Smart sync existed: keep asking.
+  uint8_t behavior = doc["syncBehavior"] | (uint8_t)0;
+  if (behavior <= static_cast<uint8_t>(KOReaderSyncBehavior::SMART)) {
+    setSyncBehavior(static_cast<KOReaderSyncBehavior>(behavior));
+  } else {
+    LOG_DBG("KRS", "Invalid syncBehavior %u in JSON, resetting to ASK_EVERY_TIME", behavior);
+    setSyncBehavior(KOReaderSyncBehavior::ASK_EVERY_TIME);
   }
 
   if (needsResave) {
@@ -143,4 +153,10 @@ void KOReaderCredentialStore::setMatchMethod(DocumentMatchMethod method) {
   if (!ensureLoaded()) return;
   matchMethod = method;
   LOG_DBG("KRS", "Set match method: %s", method == DocumentMatchMethod::FILENAME ? "Filename" : "Binary");
+}
+
+void KOReaderCredentialStore::setSyncBehavior(KOReaderSyncBehavior behavior) {
+  if (!ensureLoaded()) return;
+  syncBehavior = behavior;
+  LOG_DBG("KRS", "Set sync behavior: %s", behavior == KOReaderSyncBehavior::SMART ? "Smart" : "Ask");
 }

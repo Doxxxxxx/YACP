@@ -13,9 +13,9 @@
 #include "fontIds.h"
 
 namespace {
-constexpr int MENU_ITEMS = 5;
-const StrId menuNames[MENU_ITEMS] = {StrId::STR_USERNAME, StrId::STR_PASSWORD, StrId::STR_SYNC_SERVER_URL,
-                                     StrId::STR_DOCUMENT_MATCHING, StrId::STR_AUTHENTICATE};
+constexpr int MENU_ITEMS = 6;
+const StrId menuNames[MENU_ITEMS] = {StrId::STR_USERNAME,          StrId::STR_PASSWORD,     StrId::STR_SYNC_SERVER_URL,
+                                     StrId::STR_DOCUMENT_MATCHING, StrId::STR_AUTHENTICATE, StrId::STR_SYNC_BEHAVIOR};
 }  // namespace
 
 void KOReaderSettingsActivity::onEnter() {
@@ -104,6 +104,14 @@ void KOReaderSettingsActivity::handleSelection() {
       return;
     }
     startActivityForResult(std::make_unique<KOReaderAuthActivity>(renderer, mappedInput), [](const ActivityResult&) {});
+  } else if (selectedIndex == 5) {
+    // Sync Behavior - toggle between Ask every time and Smart sync
+    const auto current = KOREADER_STORE.getSyncBehavior();
+    const auto newBehavior = (current == KOReaderSyncBehavior::ASK_EVERY_TIME) ? KOReaderSyncBehavior::SMART
+                                                                              : KOReaderSyncBehavior::ASK_EVERY_TIME;
+    KOREADER_STORE.setSyncBehavior(newBehavior);
+    KOREADER_STORE.saveToFile();
+    requestUpdate();
   }
 }
 
@@ -137,6 +145,9 @@ void KOReaderSettingsActivity::render(RenderLock&&) {
                                                                                   : std::string(tr(STR_BINARY));
         } else if (index == 4) {
           return KOREADER_STORE.hasCredentials() ? "" : std::string("[") + tr(STR_SET_CREDENTIALS_FIRST) + "]";
+        } else if (index == 5) {
+          return KOREADER_STORE.getSyncBehavior() == KOReaderSyncBehavior::SMART ? std::string(tr(STR_SMART_SYNC))
+                                                                                 : std::string(tr(STR_ASK_EVERY_TIME));
         }
         return std::string(tr(STR_NOT_SET));
       },

@@ -1,3 +1,15 @@
+## [Unreleased]
+
+### Added
+
+- Added a KOReader Sync Behavior setting. With Smart sync the firmware resolves unambiguous progress conflicts
+  without a prompt: it uploads when the server has no progress for the book or when the local position is ahead,
+  and applies the remote position when that one is ahead, skipping the comparison screen entirely. The comparison
+  screen is still shown when both sides are within 0.1 percentage points of each other or when the remote position
+  cannot be mapped to a page. The setting defaults to Ask every time, so existing installations keep the previous
+  behavior until it is changed. A Smart sync upload also returns to the book on its own after 1.2 seconds instead of
+  waiting for a key press.
+
 ## [v1.7.1-yacp] - 2026-09-20
 
 ### Added

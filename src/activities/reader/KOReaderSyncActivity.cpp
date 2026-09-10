@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <cassert>
+#include <cmath>
 
 #include "CrossPointSettings.h"
 #include "Epub/Section.h"
@@ -101,6 +102,12 @@ void KOReaderSyncActivity::saveProgressAndReturn(const CrossPointPosition& posit
 
 void KOReaderSyncActivity::returnToReader() { activityManager.goToReader(epubPath); }
 
+bool KOReaderSyncActivity::smartSyncEnabled() const {
+  return KOREADER_STORE.getSyncBehavior() == KOReaderSyncBehavior::SMART;
+}
+
+void KOReaderSyncActivity::markAutoReturn() { autoReturnAt = millis() + AUTO_RETURN_DELAY_MS; }
+
 bool KOReaderSyncActivity::consumeInitialConfirmRelease() {
   if (!lockInitialConfirmRelease) {
     return false;
@@ -181,6 +188,13 @@ void KOReaderSyncActivity::performSync() {
   const auto result = KOReaderSyncClient::getProgress(documentHash, remoteProgress);
 
   if (result == KOReaderSyncClient::NOT_FOUND) {
+    if (smartSyncEnabled()) {
+      // Nothing to compare against: uploading is the only sensible action.
+      LOG_DBG("KOSync", "Smart sync: no remote progress, uploading local %.6f", localProgress.percentage);
+      performUpload();
+      return;
+    }
+
     // No remote progress - offer to upload
     {
       RenderLock lock(*this);
@@ -271,6 +285,26 @@ void KOReaderSyncActivity::performSync() {
   }
   // localProgress was pre-computed in EpubReaderActivity before the Epub was released.
 
+  // Smart sync acts on the same comparison the prompt would pre-select, and only
+  // when the direction is unambiguous. Deciding here saves the result render.
+  if (smartSyncEnabled()) {
+    static constexpr float SAME_PROGRESS_EPSILON = 0.001f;  // 0.1 percentage points
+    const float delta = localProgress.percentage - remoteProgress.percentage;
+    // totalPages == 0 means ProgressMapper could not resolve the remote position to a page.
+    const bool ambiguous = std::fabs(delta) <= SAME_PROGRESS_EPSILON || remotePosition.totalPages <= 0;
+    LOG_DBG("KOSync", "Smart decision: local=%.6f remote=%.6f delta=%.6f mapped=%d/%d ambiguous=%d",
+            localProgress.percentage, remoteProgress.percentage, delta, remotePosition.spineIndex,
+            remotePosition.totalPages, ambiguous ? 1 : 0);
+    if (!ambiguous) {
+      if (delta > 0) {
+        performUpload();
+      } else {
+        saveProgressAndReturn(remotePosition);
+      }
+      return;
+    }
+  }
+
   {
     RenderLock lock(*this);
     state = SHOWING_RESULT;
@@ -333,6 +367,10 @@ void KOReaderSyncActivity::performUpload() {
   {
     RenderLock lock(*this);
     state = UPLOAD_COMPLETE;
+  }
+  if (smartSyncEnabled()) {
+    // Smart sync never asked anything; do not make the user dismiss the result either.
+    markAutoReturn();
   }
   requestUpdate(true);
 }
@@ -511,6 +549,10 @@ void KOReaderSyncActivity::loop() {
   }
 
   if (state == NO_CREDENTIALS || state == SYNC_FAILED || state == UPLOAD_COMPLETE) {
+    if (autoReturnAt != 0 && millis() >= autoReturnAt) {
+      returnToReader();
+      return;
+    }
     if (mappedInput.wasReleased(MappedInputManager::Button::Back)) {
       returnToReader();
     }

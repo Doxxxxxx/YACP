@@ -11,6 +11,12 @@ enum class DocumentMatchMethod : uint8_t {
   BINARY = 1,    // Match by partial MD5 of file content (more accurate, but files must be identical)
 };
 
+// How the sync activity resolves a local/remote progress difference
+enum class KOReaderSyncBehavior : uint8_t {
+  ASK_EVERY_TIME = 0,  // Always show the comparison screen and let the user choose
+  SMART = 1,           // Resolve unambiguous cases without a prompt
+};
+
 /**
  * Singleton class for storing KOReader sync credentials on the SD card.
  * Passwords are XOR-obfuscated with the device's unique hardware MAC address
@@ -26,6 +32,8 @@ class KOReaderCredentialStore : public PersistableStore<KOReaderCredentialStore>
   std::string password;
   std::string serverUrl;                                            // Custom sync server URL (empty = default)
   DocumentMatchMethod matchMethod = DocumentMatchMethod::FILENAME;  // Default to filename for compatibility
+  // Default to asking so existing installations keep their current behavior.
+  KOReaderSyncBehavior syncBehavior = KOReaderSyncBehavior::ASK_EVERY_TIME;
   LoadState loadState = LoadState::NotLoaded;
 
   // Private constructor for singleton
@@ -76,6 +84,13 @@ class KOReaderCredentialStore : public PersistableStore<KOReaderCredentialStore>
   DocumentMatchMethod getMatchMethod() const {
     const_cast<KOReaderCredentialStore*>(this)->ensureLoaded();
     return matchMethod;
+  }
+
+  // Sync conflict resolution behavior
+  void setSyncBehavior(KOReaderSyncBehavior behavior);
+  KOReaderSyncBehavior getSyncBehavior() const {
+    const_cast<KOReaderCredentialStore*>(this)->ensureLoaded();
+    return syncBehavior;
   }
 };
 
