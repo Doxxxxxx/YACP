@@ -1,3 +1,49 @@
+## [v1.7.0-yacp.3] - 2026-09-13
+
+This beta consolidates the work completed since the stable YACP 1.6.2 release. It includes the 1.6.3 hardware and
+update corrections, then adds an offline dictionary, broader CJK metadata rendering, reading UI refinements, and two
+EPUB layout fixes. The core CJK metadata path has been validated successfully on an X3 with Traditional Chinese book
+titles. Dictionary lookup and the complete consolidated build still need broader X3 and X4 hardware testing.
+
+### Added
+
+- Added an on-demand offline dictionary to the EPUB reader. A word can be selected directly on the current page and
+  looked up in one prepared, uncompressed StarDict dictionary stored on the SD card.
+- Added a desktop preparation script and setup guide for the compact `.idx.oft.cspt` accelerator. The accelerator stays
+  on the SD card, definitions are bounded to 8 KB, and the feature performs no discovery, allocation, file access, or
+  background work until Dictionary is explicitly selected. This adapts CrossInk's prepared index format and
+  CrossPoint's reader word-selection approach to YACP's ESP32-C3 memory constraints.
+- Added CJK detection for dynamic book metadata. When an SD-card reading font is selected, Chinese, Japanese, and Korean
+  titles, authors, paths, chapter names, reader menu titles, and chapter selector entries can use that font across Home,
+  Recent Books, File Browser, and reader screens instead of showing missing built-in glyphs.
+
+### Changed
+
+- Quick Resume is now the default sleep screen for fresh settings and when applying the YACP button-layout profile.
+  Existing saved sleep-screen choices are preserved.
+- Renamed the previous YACP Dashboard sleep-screen option to Reading Dashboard in all 26 supported languages, making it
+  distinct from Quick Resume.
+- Reading Statistics now uses larger values and labels when they fit, with an automatic fallback for long translated
+  text.
+- Sleep image rendering now names its adaptive grayscale processing explicitly and offers a CrossPoint Original mode
+  for users who prefer the earlier, generally lighter tonal mapping. Existing saved choices keep their behavior.
+- The YACP setup profile now keeps X3's no-flash reinforcement on every page exclusive to X3. On X4 it uses the normal
+  30-page full-clean cadence and repairs the exact legacy YACP refresh preset that could cause a strong refresh on every
+  page.
+
+### Fixed
+
+- Consecutive EPUB `<br>` elements no longer accumulate inherited top margins, which could eventually force each
+  paragraph onto a separate page in books encoded with `<br><br>` paragraph separators.
+- Justified lines no longer stretch each inter-word gap by more than one natural space. Lines requiring wider gaps keep
+  their normal spacing instead of producing visible rivers.
+- Newer X3 UC8279d panels with blank MTP data are now recognized only when two non-uniform RMTP reads match exactly,
+  avoiding both missed hardware detection and false positives from a floating bus.
+- The UC8279d driver now always sends the display power-off command before deep sleep while waiting for BUSY only when
+  the panel was active.
+- Firmware Update now checks YACP releases, selects the matching Tiny or XLarge artifact, and reports an up-to-date
+  installation as no update instead of a failure.
+
 ## [v1.6.3-yacp.2] - 2026-09-01
 
 This pre-release completes several corrections prepared around YACP 1.6.2 and hardens support for recent X3
