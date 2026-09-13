@@ -184,9 +184,10 @@ std::vector<size_t> cjkCharacterBreakByteOffsets(const std::string& text) {
   return allowedOffsets;
 }
 
-int computeJustifyExtra(const int spareSpace, const size_t gapCount) {
-  if (gapCount < MIN_JUSTIFY_GAPS || spareSpace <= 0) return 0;
-  return spareSpace / static_cast<int>(gapCount);
+int computeJustifyExtra(const int spareSpace, const size_t gapCount, const int maxExtraPerGap) {
+  if (gapCount < MIN_JUSTIFY_GAPS || spareSpace <= 0 || maxExtraPerGap <= 0) return 0;
+  const int extraPerGap = spareSpace / static_cast<int>(gapCount);
+  return extraPerGap <= maxExtraPerGap ? extraPerGap : 0;
 }
 
 bool isBase64LikeChar(const char c) {
@@ -1187,10 +1188,12 @@ bool ParsedText::extractLine(Arena& scratchArena, const size_t breakIndex, const
           ? CssTextAlign::Right
           : blockStyle.alignment;
 
-  // For justified text, compute per-gap extra to distribute remaining space evenly
+  // Do not stretch a gap by more than one natural space. Lines that would need
+  // wider gaps keep their natural spacing instead of producing visible rivers.
   const int spareSpace = effectivePageWidth - lineWordWidthSum - totalNaturalGaps;
+  const int maxJustifyExtra = renderer.getTextAdvanceX(fontId, " ", EpdFontFamily::REGULAR);
   const int justifyExtra = (effectiveAlignment == CssTextAlign::Justify && !isLastLine)
-                               ? computeJustifyExtra(spareSpace, actualGapCount)
+                               ? computeJustifyExtra(spareSpace, actualGapCount, maxJustifyExtra)
                                : 0;
 
   visualOrderScratch.clear();
@@ -1271,7 +1274,7 @@ bool ParsedText::extractLine(Arena& scratchArena, const size_t breakIndex, const
 
     const int reorderedSpare = effectivePageWidth - reorderedWordWidthSum - reorderedNaturalGaps;
     const int reorderedJustifyExtra = (effectiveAlignment == CssTextAlign::Justify && !isLastLine)
-                                          ? computeJustifyExtra(reorderedSpare, reorderedGapCount)
+                                          ? computeJustifyExtra(reorderedSpare, reorderedGapCount, maxJustifyExtra)
                                           : 0;
     activeJustifyExtra = reorderedJustifyExtra;
     const int justifyContribution = (effectiveAlignment == CssTextAlign::Justify && !isLastLine)

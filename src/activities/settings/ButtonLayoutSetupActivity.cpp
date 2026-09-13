@@ -60,6 +60,7 @@ void ButtonLayoutSetupActivity::applySelection() {
     SETTINGS.frontButtonBack = CrossPointSettings::FRONT_HW_RIGHT;
     SETTINGS.shortPwrBtn = CrossPointSettings::SLEEP;
     SETTINGS.longPwrBtn = CrossPointSettings::FORCE_REFRESH;
+    SETTINGS.sleepScreen = CrossPointSettings::QUICK_RESUME;
     SETTINGS.quickResumeSleepScreen = CrossPointSettings::QUICK_RESUME_AFTER_TIMEOUT;
     if (gpio.deviceIsX3()) {
       SETTINGS.refreshFrequency = CrossPointSettings::REFRESH_1;

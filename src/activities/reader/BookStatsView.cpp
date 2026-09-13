@@ -317,12 +317,18 @@ void drawCenteredLabel(const GfxRenderer& renderer, const int fontId, const int 
 
 void drawStatCell(const GfxRenderer& renderer, const int x, const int w, const int y, const int h, const char* value,
                   const char* label) {
-  const int valueLineH = renderer.getLineHeight(UI_12_FONT_ID);
-  const int labelLineH = renderer.getLineHeight(SMALL_FONT_ID);
+  constexpr int kTextSidePadding = 8;
+  const int maxTextWidth = std::max(1, w - kTextSidePadding * 2);
+  const int valueFontId = renderer.getTextWidth(LEXENDDECA_16_FONT_ID, value, EpdFontFamily::BOLD) <= maxTextWidth
+                              ? LEXENDDECA_16_FONT_ID
+                              : UI_12_FONT_ID;
+  const int labelFontId = renderer.getTextWidth(UI_10_FONT_ID, label) <= maxTextWidth ? UI_10_FONT_ID : SMALL_FONT_ID;
+  const int valueLineH = renderer.getLineHeight(valueFontId);
+  const int labelLineH = renderer.getLineHeight(labelFontId);
   const int totalTextH = valueLineH + 4 + labelLineH;
   const int textY = y + (h - totalTextH) / 2;
-  drawCenteredLabel(renderer, UI_12_FONT_ID, x, w, textY, value, true);
-  drawCenteredLabel(renderer, SMALL_FONT_ID, x, w, textY + valueLineH + 4, label);
+  drawCenteredLabel(renderer, valueFontId, x, w, textY, value, true);
+  drawCenteredLabel(renderer, labelFontId, x, w, textY + valueLineH + 4, label);
 }
 
 void drawSectionCard(const GfxRenderer& renderer, const int x, const int y, const int w, const int h, const char* title,

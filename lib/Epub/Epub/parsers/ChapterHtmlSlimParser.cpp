@@ -1970,10 +1970,12 @@ void XMLCALL ChapterHtmlSlimParser::startElement(void* userData, const XML_Char*
       // the block remains empty (i.e. <br> is a section separator between paragraphs).
       // If the block gets text added before the next block opens it becomes non-empty,
       // goes through makePages() normally, and the flag has no effect (inline <br> case).
+      // A line break starts a sibling block inside the current container. Reusing the
+      // previous text block here would also reuse the synthetic top margin added for
+      // an earlier empty <br>. In books that encode every paragraph as text<br><br>,
+      // that margin would grow by one line per paragraph and eventually force every
+      // paragraph onto a separate page.
       BlockStyle brStyle = self->blockStyleBuf_[self->blockStyleCount_ - 1].withoutBottom();
-      if (self->currentTextBlock) {
-        brStyle = self->currentTextBlock->getBlockStyle();
-      }
       brStyle.fromBrElement = true;
       self->startNewTextBlock(brStyle);
     } else {
