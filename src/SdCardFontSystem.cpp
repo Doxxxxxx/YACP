@@ -5,6 +5,10 @@
 
 #include "CrossPointSettings.h"
 
+namespace {
+constexpr uint8_t UI_METADATA_TARGET_POINT_SIZE = 12;
+}
+
 void SdCardFontSystem::begin(GfxRenderer& renderer) {
   (void)renderer;
 
@@ -19,6 +23,7 @@ void SdCardFontSystem::begin(GfxRenderer& renderer) {
 }
 
 void SdCardFontSystem::ensureLoaded(GfxRenderer& renderer) {
+  renderer.setUiMetadataFont(0);
   const char* wantedFamily = SETTINGS.sdFontFamilyName;
   const std::string& currentFamily = manager_.currentFamilyName();
 
@@ -37,6 +42,7 @@ void SdCardFontSystem::ensureLoaded(GfxRenderer& renderer) {
   const uint8_t sizeStep = SETTINGS.fontSize;
   if (!registryDirty_.load(std::memory_order_acquire) && currentFamily == wantedFamily &&
       loadedFontSizeStep_ == sizeStep && loadedTargetPointSize_ == targetPointSize) {
+    renderer.setUiMetadataFont(manager_.getFontId(wantedFamily));
     return;
   }
 
@@ -66,6 +72,7 @@ void SdCardFontSystem::ensureLoaded(GfxRenderer& renderer) {
     if (!registryWasDirty && wantedPt == manager_.currentPointSize()) {
       loadedFontSizeStep_ = sizeStep;
       loadedTargetPointSize_ = targetPointSize;
+      renderer.setUiMetadataFont(manager_.getFontId(wantedFamily));
       return;
     }
     LOG_DBG("SDFS", "Reloading %s: size %u -> %u (target %u step %u)%s", wantedFamily, manager_.currentPointSize(),
@@ -81,6 +88,7 @@ void SdCardFontSystem::ensureLoaded(GfxRenderer& renderer) {
     if (manager_.loadFamily(*family, renderer, targetPointSize, sizeStep)) {
       loadedFontSizeStep_ = sizeStep;
       loadedTargetPointSize_ = targetPointSize;
+      renderer.setUiMetadataFont(manager_.getFontId(wantedFamily));
       LOG_DBG("SDFS", "Loaded SD font family: %s", wantedFamily);
     } else {
       // A load can fail because the heap is temporarily fragmented. Keep the
@@ -99,8 +107,64 @@ void SdCardFontSystem::ensureLoaded(GfxRenderer& renderer) {
   }
 }
 
+int SdCardFontSystem::ensureUiMetadataFontLoaded(GfxRenderer& renderer) {
+  const char* wantedFamily = SETTINGS.sdFontFamilyName;
+  if (wantedFamily[0] == '\0') {
+    renderer.setUiMetadataFont(0);
+    return 0;
+  }
+
+  const bool registryWasDirty = ensureRegistry();
+  const auto* family = registry_.findFamily(wantedFamily);
+  if (!family) {
+    LOG_ERR("SDFS", "UI metadata font family not found: %s", wantedFamily);
+    if (!manager_.currentFamilyName().empty()) manager_.unloadAll(renderer);
+    renderer.setUiMetadataFont(0);
+    releaseRegistry();
+    return 0;
+  }
+
+  const auto* wantedFile = family->findClosestFile(UI_METADATA_TARGET_POINT_SIZE, EpdFontFamily::REGULAR);
+  if (!wantedFile) {
+    LOG_ERR("SDFS", "UI metadata font family has no regular file: %s", wantedFamily);
+    if (!manager_.currentFamilyName().empty()) manager_.unloadAll(renderer);
+    renderer.setUiMetadataFont(0);
+    releaseRegistry();
+    return 0;
+  }
+
+  const bool alreadyLoaded = manager_.currentFamilyName() == wantedFamily &&
+                             manager_.currentPointSize() == wantedFile->pointSize && !registryWasDirty;
+  if (!alreadyLoaded) {
+    if (!manager_.currentFamilyName().empty()) {
+      manager_.unloadAll(renderer);
+    }
+    if (!manager_.loadFamilyClosest(*family, renderer, UI_METADATA_TARGET_POINT_SIZE)) {
+      LOG_ERR("SDFS", "Failed to load UI metadata font family: %s", wantedFamily);
+      renderer.setUiMetadataFont(0);
+      loadedFontSizeStep_ = UINT8_MAX;
+      loadedTargetPointSize_ = UINT8_MAX;
+      releaseRegistry();
+      return 0;
+    }
+  }
+
+  const int fontId = manager_.getFontId(wantedFamily);
+  renderer.setUiMetadataFont(fontId);
+  // The next reader entry must verify its own size-step mapping and reload if
+  // it differs from this compact UI size.
+  loadedFontSizeStep_ = UINT8_MAX;
+  loadedTargetPointSize_ = UINT8_MAX;
+  releaseRegistry();
+  LOG_DBG("SDFS", "UI metadata font ready: %s size=%u id=%d", wantedFamily, manager_.currentPointSize(), fontId);
+  return fontId;
+}
+
 void SdCardFontSystem::releaseLoadedFont(GfxRenderer& renderer) {
-  if (manager_.currentFamilyName().empty()) return;
+  if (manager_.currentFamilyName().empty()) {
+    renderer.setUiMetadataFont(0);
+    return;
+  }
 
   const std::string familyName = manager_.currentFamilyName();
   (void)familyName;

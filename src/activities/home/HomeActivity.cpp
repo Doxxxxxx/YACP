@@ -35,6 +35,7 @@
 #include "RecentBookProgress.h"
 #include "RecentBooksStore.h"
 #include "SavedItemsHomeActivity.h"
+#include "SdCardFontSystem.h"
 #include "components/UITheme.h"
 #include "components/themes/dashboard/DashboardTheme.h"
 #include "components/themes/lyra/LyraCarouselTheme.h"
@@ -939,9 +940,8 @@ void HomeActivity::onEnter() {
 
   const auto& metrics = UITheme::getInstance().getMetrics();
   const int recentBooksToLoad =
-      isYacpTheme
-          ? metrics.homeRecentBooksCount
-          : std::min(kMaxCachedBooks, std::max(metrics.homeRecentBooksCount, HOME_BOOK_SWAP_RECENT_COUNT));
+      isYacpTheme ? metrics.homeRecentBooksCount
+                  : std::min(kMaxCachedBooks, std::max(metrics.homeRecentBooksCount, HOME_BOOK_SWAP_RECENT_COUNT));
   loadRecentBooks(recentBooksToLoad, !isYacpTheme);
 
   if (!APP_STATE.openEpubPath.empty()) {
@@ -968,6 +968,8 @@ void HomeActivity::onEnter() {
     loadAllBookStats();
   }
   updateHighlightedBookContext();
+  sdFontSystem.ensureUiMetadataFontLoaded(renderer);
+  prewarmUiMetadata();
 
   // YACP always returns to the reading surface. The caller's legacy menu hint
   // is useful to selector-based themes, but acting on it here would probe every
@@ -1139,6 +1141,8 @@ void HomeActivity::onExit() {
   gCarouselCache.invalidate();
   freeCarouselFrames();
   carouselWarmupPending = false;
+  sdFontSystem.releaseLoadedFont(renderer);
+  sdFontSystem.releaseRegistry();
 }
 
 bool HomeActivity::storeCoverBuffer() {
@@ -1853,7 +1857,26 @@ void HomeActivity::loop() {
   }
 }
 
+void HomeActivity::prewarmUiMetadata() {
+  // At most three recent books are resident on Home. Prewarm their dynamic
+  // metadata in one SD read batch; the pointer array is bounded to 40 bytes on ESP32.
+  const char* metadataText[kMaxCachedBooks * 3 + 1] = {};
+  size_t metadataTextCount = 0;
+  for (const auto& book : recentBooks) {
+    if (metadataTextCount + 3 > std::size(metadataText)) break;
+    metadataText[metadataTextCount++] = book.title.c_str();
+    metadataText[metadataTextCount++] = book.author.c_str();
+    metadataText[metadataTextCount++] = book.path.c_str();
+  }
+  if (!currentBookChapterTitle.empty() && metadataTextCount < std::size(metadataText)) {
+    metadataText[metadataTextCount++] = currentBookChapterTitle.c_str();
+  }
+  renderer.prewarmUiMetadata(metadataText, metadataTextCount);
+}
+
 void HomeActivity::render(RenderLock&&) {
+  prewarmUiMetadata();
+
   const auto displayHomeBuffer = [this](const bool fullRefreshNormally = false) {
     const bool useFullRefresh = forceFullRefreshOnNextDisplay || fullRefreshNormally;
     renderer.displayBuffer(useFullRefresh ? HalDisplay::FULL_REFRESH : HalDisplay::FAST_REFRESH);
@@ -1867,9 +1890,8 @@ void HomeActivity::render(RenderLock&&) {
   if (usesMinimalHomeInteraction()) {
     renderer.clearScreen();
     const bool isYacpTheme = isDashboardTheme();
-    const Rect yacpSafeArea =
-        isYacpTheme ? UITheme::getInstance().getScreenSafeArea(renderer, true, false)
-                    : Rect{0, 0, pageWidth, pageHeight};
+    const Rect yacpSafeArea = isYacpTheme ? UITheme::getInstance().getScreenSafeArea(renderer, true, false)
+                                          : Rect{0, 0, pageWidth, pageHeight};
     const Rect headerRect{yacpSafeArea.x, yacpSafeArea.y + metrics.topPadding, yacpSafeArea.width,
                           metrics.homeTopPadding};
 
@@ -1880,20 +1902,20 @@ void HomeActivity::render(RenderLock&&) {
                                  : buildMinimalMenuItems(hasOpdsServers, hasReadingStats, hasBookmarks, hasClippings);
       const Rect menuRect{yacpSafeArea.x, yacpSafeArea.y + metrics.homeTopPadding, yacpSafeArea.width,
                           std::max(0, yacpSafeArea.height - metrics.homeTopPadding)};
-      GUI.drawButtonMenu(renderer, menuRect, static_cast<int>(menuItems.size()), minimalMenuIndex,
-                         [&menuItems](int index) { return menuItems[index].label; },
-                         [&menuItems](int index) { return menuItems[index].icon; });
+      GUI.drawButtonMenu(
+          renderer, menuRect, static_cast<int>(menuItems.size()), minimalMenuIndex,
+          [&menuItems](int index) { return menuItems[index].label; },
+          [&menuItems](int index) { return menuItems[index].icon; });
       const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_SELECT), tr(STR_DIR_UP), tr(STR_DIR_DOWN));
       GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
       displayHomeBuffer();
       return;
     }
 
-    const Rect homeRect =
-        isYacpTheme
-            ? Rect{yacpSafeArea.x, yacpSafeArea.y + metrics.homeTopPadding, yacpSafeArea.width,
-                   std::max(0, yacpSafeArea.height - metrics.homeTopPadding)}
-            : Rect{0, metrics.homeTopPadding, pageWidth, metrics.homeCoverTileHeight};
+    const Rect homeRect = isYacpTheme
+                              ? Rect{yacpSafeArea.x, yacpSafeArea.y + metrics.homeTopPadding, yacpSafeArea.width,
+                                     std::max(0, yacpSafeArea.height - metrics.homeTopPadding)}
+                              : Rect{0, metrics.homeTopPadding, pageWidth, metrics.homeCoverTileHeight};
     const Rect cacheRect = isYacpTheme ? DashboardTheme::homeCoverCacheRect(renderer, homeRect)
                                        : MinimalTheme::homeCoverCacheRect(renderer, homeRect);
     coverRectX = cacheRect.x;
@@ -1905,8 +1927,7 @@ void HomeActivity::render(RenderLock&&) {
     GUI.drawHeader(renderer, headerRect, nullptr);
 
     GUI.drawRecentBookCover(renderer, homeRect, recentBooks, selectorIndex, coverRendered, coverBufferStored,
-                            bufferRestored,
-                            std::bind(&HomeActivity::storeCoverBuffer, this),
+                            bufferRestored, std::bind(&HomeActivity::storeCoverBuffer, this),
                             hasAnyBookStats(currentBookStats) ? &currentBookStats : nullptr, currentBookProgressPercent,
                             &globalStats, currentBookChapterTitle.c_str());
 
@@ -1928,11 +1949,9 @@ void HomeActivity::render(RenderLock&&) {
       // Place a unique marker through the same logical-to-physical mapping.
       // Pointer identity is unambiguous even if two translations are equal.
       const char selectedMarker[] = {'\x01', '\0'};
-      const auto selectedLabels =
-          mappedInput.mapLabels(selectedSemanticIndex == 0 ? selectedMarker : "",
-                                selectedSemanticIndex == 1 ? selectedMarker : "",
-                                selectedSemanticIndex == 2 ? selectedMarker : "",
-                                selectedSemanticIndex == 3 ? selectedMarker : "");
+      const auto selectedLabels = mappedInput.mapLabels(
+          selectedSemanticIndex == 0 ? selectedMarker : "", selectedSemanticIndex == 1 ? selectedMarker : "",
+          selectedSemanticIndex == 2 ? selectedMarker : "", selectedSemanticIndex == 3 ? selectedMarker : "");
       const char* physicalSelection[] = {selectedLabels.btn1, selectedLabels.btn2, selectedLabels.btn3,
                                          selectedLabels.btn4};
       for (int i = 0; i < 4; ++i) {
@@ -2135,8 +2154,8 @@ void HomeActivity::onReadingStatsOpen() {
   const std::string bookTitle =
       highlightedBookIdx >= 0 ? recentBooks[highlightedBookIdx].title : std::string(tr(STR_READING_STATS));
   const std::string bookPath = getCurrentBookPath();
-  const std::string cachePath = highlightedBookIdx >= 0 ? getRecentBookCachePath(recentBooks[highlightedBookIdx])
-                                                        : std::string{};
+  const std::string cachePath =
+      highlightedBookIdx >= 0 ? getRecentBookCachePath(recentBooks[highlightedBookIdx]) : std::string{};
   if (showAllDevicesStats) {
     startActivityForResult(std::make_unique<BookStatsActivity>(renderer, mappedInput, bookTitle, cachePath,
                                                                currentBookStats, currentBookProgressPercent, false, 0,

@@ -6,6 +6,7 @@
 
 class GfxRenderer;
 class SdCardFont;
+struct SdCardFontFileInfo;
 struct SdCardFontFamilyInfo;
 
 class SdCardFontManager {
@@ -21,6 +22,10 @@ class SdCardFontManager {
   // resident interval + kern/ligature tables to one size's worth of memory.
   // Returns true on success.
   bool loadFamily(const SdCardFontFamilyInfo& family, GfxRenderer& renderer, uint8_t targetPointSize, uint8_t sizeStep);
+
+  // Load the file whose point size is closest to targetPointSize, independent
+  // of the reader's size-step setting. Used for compact UI metadata.
+  bool loadFamilyClosest(const SdCardFontFamilyInfo& family, GfxRenderer& renderer, uint8_t targetPointSize);
 
   // Unload everything, unregister from renderer.
   void unloadAll(GfxRenderer& renderer);
@@ -43,6 +48,8 @@ class SdCardFontManager {
     uint8_t size;
   };
   static int computeFontId(uint32_t contentHash, const char* familyName, uint8_t pointSize);
+  bool loadSelectedFile(const SdCardFontFamilyInfo& family, const SdCardFontFileInfo& selected, GfxRenderer& renderer,
+                        uint8_t targetPointSize);
 
   std::string loadedFamilyName_;
   uint8_t loadedPointSize_ = 0;

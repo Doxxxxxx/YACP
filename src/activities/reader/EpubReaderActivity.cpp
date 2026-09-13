@@ -26,6 +26,7 @@
 #include "ClippingStore.h"
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
+#include "DictionaryWordSelectActivity.h"
 #include "EpubReaderBookmarkListActivity.h"
 #include "EpubReaderChapterSelectionActivity.h"
 #include "EpubReaderClippingListActivity.h"
@@ -1985,6 +1986,11 @@ void EpubReaderActivity::openReaderMenu() {
   const int bookProgressPercent = clampPercent(static_cast<int>(bookProgress + 0.5f));
   const bool hasBookGallery = epub && BookGallery::hasImagesForBook(epub->getPath());
 
+  // Reader metadata screens need the compact file from the selected SD family.
+  // Swapping here keeps only one SD font file open at a time on real hardware.
+  sdFontSystem.ensureUiMetadataFontLoaded(renderer);
+  sdFontSystem.releaseRegistry();
+
   pauseReadingPaceTimer("reader_menu");
   startActivityForResult(
       std::make_unique<EpubReaderMenuActivity>(
@@ -1998,9 +2004,9 @@ void EpubReaderActivity::openReaderMenu() {
           hasBookGallery),
       [this](const ActivityResult& result) {
         if (const auto* clipping = std::get_if<ClippingJumpResult>(&result.data)) {
+          ensureReaderSdFontLoaded(renderer);
           applyOrientation(clipping->orientation);
           if (clipping->settingsChanged) {
-            ensureReaderSdFontLoaded(renderer);
             RenderLock lock(*this);
             if (section) {
               cacheCurrentSectionPosition();
@@ -2015,13 +2021,19 @@ void EpubReaderActivity::openReaderMenu() {
         // Always apply orientation change even if the menu was cancelled
         const auto* menu = std::get_if<MenuResult>(&result.data);
         if (menu == nullptr) {
+          ensureReaderSdFontLoaded(renderer);
           resumeReadingPaceTimer("reader_menu_return");
           requestUpdate();
           return;
         }
         applyOrientation(menu->orientation);
-        if (menu->settingsChanged) {
+        const auto action = static_cast<EpubReaderMenuActivity::MenuAction>(menu->action);
+        const bool openingChapterSelector =
+            !result.isCancelled && action == EpubReaderMenuActivity::MenuAction::SELECT_CHAPTER;
+        if (!openingChapterSelector) {
           ensureReaderSdFontLoaded(renderer);
+        }
+        if (menu->settingsChanged) {
           RenderLock lock(*this);
           if (section) {
             cacheCurrentSectionPosition();
@@ -2030,7 +2042,7 @@ void EpubReaderActivity::openReaderMenu() {
         }
         resumeReadingPaceTimer("reader_menu_return");
         if (!result.isCancelled) {
-          onReaderMenuConfirm(static_cast<EpubReaderMenuActivity::MenuAction>(menu->action));
+          onReaderMenuConfirm(action);
         }
       });
 }
@@ -2544,6 +2556,7 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
       startActivityForResult(
           std::make_unique<EpubReaderChapterSelectionActivity>(renderer, mappedInput, epub, path, spineIdx),
           [this](const ActivityResult& result) {
+            ensureReaderSdFontLoaded(renderer);
             if (!result.isCancelled) {
               const auto& chapterResult = std::get<ChapterResult>(result.data);
               RenderLock lock(*this);
@@ -2757,6 +2770,10 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
                                                 estimatedTimeLeftSeconds, globalStats),
             [this](const ActivityResult&) { handleBookStatsReturn(); });
       }
+      break;
+    }
+    case EpubReaderMenuActivity::MenuAction::DICTIONARY: {
+      startDictionarySelection();
       break;
     }
     case EpubReaderMenuActivity::MenuAction::BOOK_GALLERY: {
@@ -3037,6 +3054,47 @@ void EpubReaderActivity::openAutoPageTurnIntervalPicker(const bool ignoreInitial
         }
         requestUpdate();
       });
+}
+
+void EpubReaderActivity::startDictionarySelection() {
+  if (!section || !epub) {
+    requestUpdate();
+    return;
+  }
+
+  ReaderViewportLayout layout{};
+  int readerFontId = 0;
+  std::unique_ptr<Page> page;
+  {
+    RenderLock lock(*this);
+    if (!section || !epub) {
+      requestUpdate();
+      return;
+    }
+    layout = computeReaderViewportLayout(renderer, automaticPageTurnActive);
+    readerFontId = activeSectionFontId > 0 ? activeSectionFontId : SETTINGS.getReaderFontId();
+    page = section->loadPageFromSectionFile();
+  }
+
+  if (!page) {
+    LOG_ERR("DICT", "Failed to load current EPUB page for dictionary selection");
+    requestUpdate();
+    return;
+  }
+
+  auto activity = makeUniqueNoThrow<DictionaryWordSelectActivity>(renderer, mappedInput, std::move(page), readerFontId,
+                                                                   layout.marginLeft, layout.marginTop);
+  if (!activity) {
+    LOG_ERR("DICT", "OOM: DictionaryWordSelectActivity");
+    requestUpdate();
+    return;
+  }
+
+  pauseReadingPaceTimer("dictionary_selection");
+  startActivityForResult(std::move(activity), [this](const ActivityResult&) {
+    resumeReadingPaceTimer("dictionary_selection_return");
+    requestUpdate();
+  });
 }
 
 void EpubReaderActivity::startClipSelection() {
@@ -4538,6 +4596,10 @@ void EpubReaderActivity::renderContents(std::unique_ptr<Page> page, const int fo
   const auto heapBefore = MemoryBudget::snapshot();
   auto scope = fcm->createPrewarmScope();
   page->renderText(renderer, fontId, orientedMarginLeft, orientedMarginTop);  // scan pass
+  // The status title can use the same SD-card CJK font as the page. Include it
+  // in the existing scan so its glyphs share one prewarm operation with the
+  // page instead of replacing the page cache with a second SD read.
+  renderStatusBar();
   scope.endScanAndPrewarm();
   const auto heapAfter = MemoryBudget::snapshot();
   fcm->logStats("prewarm");

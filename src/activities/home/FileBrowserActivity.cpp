@@ -15,6 +15,7 @@
 #include "CrossPointState.h"
 #include "FileBrowserActionActivity.h"
 #include "MappedInputManager.h"
+#include "SdCardFontSystem.h"
 #include "activities/reader/EpubReaderActivity.h"
 #include "activities/util/ConfirmationActivity.h"
 #include "activities/util/OptionSelectionActivity.h"
@@ -234,6 +235,7 @@ void FileBrowserActivity::loadFiles() {
   if (!loadFilesIntoVector(INDEX_THRESHOLD, overflow)) {
     return;
   }
+  sdFontSystem.ensureUiMetadataFontLoaded(renderer);
 
   if (!overflow || fileListMemoryLimited) {
     FsHelpers::sortFileList(files);
@@ -348,6 +350,8 @@ void FileBrowserActivity::onEnter() {
 
 void FileBrowserActivity::onExit() {
   Activity::onExit();
+  sdFontSystem.releaseLoadedFont(renderer);
+  sdFontSystem.releaseRegistry();
   files.clear();
   fileNameBuffer.reset();
   fileIndex.reset();
@@ -887,6 +891,23 @@ std::string getFileExtension(const std::string& filename) {
 }  // namespace
 
 void FileBrowserActivity::render(RenderLock&&) {
+  // A screen can show at most 27 rows with the smallest theme metrics. Keep
+  // a 32-entry window around the selection, which costs 128 bytes on ESP32.
+  constexpr size_t kMetadataWindow = 32;
+  const char* metadataText[kMetadataWindow + 1] = {};
+  size_t metadataTextCount = 0;
+  metadataText[metadataTextCount++] = basepath.c_str();
+  const size_t visibleEntriesForPrewarm = entryCount();
+  size_t metadataStart = selectorIndex > kMetadataWindow / 2 ? selectorIndex - kMetadataWindow / 2 : 0;
+  if (metadataStart + kMetadataWindow > visibleEntriesForPrewarm) {
+    metadataStart = visibleEntriesForPrewarm > kMetadataWindow ? visibleEntriesForPrewarm - kMetadataWindow : 0;
+  }
+  const size_t metadataEnd = std::min(visibleEntriesForPrewarm, metadataStart + kMetadataWindow);
+  for (size_t row = metadataStart; row < metadataEnd; ++row) {
+    metadataText[metadataTextCount++] = entryNameAt(row);
+  }
+  renderer.prewarmUiMetadata(metadataText, metadataTextCount, 0x01);
+
   renderer.clearScreen();
 
   const auto pageWidth = renderer.getScreenWidth();
@@ -959,22 +980,23 @@ void FileBrowserActivity::render(RenderLock&&) {
     // Left-truncate so the deepest directory is always visible
     const char* pathStr = basepath.c_str();
     const char* pathDisplay = pathStr;
+    const int pathFont = renderer.uiMetadataFontForText(SMALL_FONT_ID, pathStr);
     char leftTruncBuf[256];
-    if (renderer.getTextWidth(SMALL_FONT_ID, pathStr) > pathMaxWidth) {
+    if (renderer.getTextWidth(pathFont, pathStr) > pathMaxWidth) {
       const char ellipsis[] = "\xe2\x80\xa6";  // UTF-8 ellipsis (…)
-      const int ellipsisWidth = renderer.getTextWidth(SMALL_FONT_ID, ellipsis);
+      const int ellipsisWidth = renderer.getTextWidth(pathFont, ellipsis);
       const int available = pathMaxWidth - ellipsisWidth;
       // Walk forward from the start until the suffix fits, skipping UTF-8 continuation bytes
       const char* p = pathStr;
       while (*p) {
-        if (renderer.getTextWidth(SMALL_FONT_ID, p) <= available) break;
+        if (renderer.getTextWidth(pathFont, p) <= available) break;
         ++p;
         while (*p && (static_cast<unsigned char>(*p) & 0xC0) == 0x80) ++p;
       }
       snprintf(leftTruncBuf, sizeof(leftTruncBuf), "%s%s", ellipsis, p);
       pathDisplay = leftTruncBuf;
     }
-    renderer.drawText(SMALL_FONT_ID, metrics.contentSidePadding, pathY, pathDisplay);
+    renderer.drawText(pathFont, metrics.contentSidePadding, pathY, pathDisplay);
   }
 
   // Help text

@@ -12,6 +12,7 @@
 #include "FileBrowserActionActivity.h"
 #include "MappedInputManager.h"
 #include "RecentBooksStore.h"
+#include "SdCardFontSystem.h"
 #include "activities/reader/EpubReaderActivity.h"
 #include "activities/util/ConfirmationActivity.h"
 #include "activities/util/OptionSelectionActivity.h"
@@ -52,6 +53,7 @@ void RecentBooksActivity::onEnter() {
 
   // Load data
   loadRecentBooks();
+  sdFontSystem.ensureUiMetadataFontLoaded(renderer);
 
   selectorIndex = 0;
   requestUpdate();
@@ -59,6 +61,8 @@ void RecentBooksActivity::onEnter() {
 
 void RecentBooksActivity::onExit() {
   Activity::onExit();
+  sdFontSystem.releaseLoadedFont(renderer);
+  sdFontSystem.releaseRegistry();
   recentBooks.clear();
 }
 
@@ -295,6 +299,16 @@ void RecentBooksActivity::showBookActionMenu(const size_t bookIndex, const bool 
 }
 
 void RecentBooksActivity::render(RenderLock&&) {
+  // The list is capped at ten books. Twenty pointers for title + author use
+  // 80 bytes on ESP32 and avoid building a temporary concatenation string.
+  const char* metadataText[MAX_LIST_RECENT_BOOKS * 2] = {};
+  size_t metadataTextCount = 0;
+  for (const auto& book : recentBooks) {
+    metadataText[metadataTextCount++] = book.title.c_str();
+    metadataText[metadataTextCount++] = book.author.c_str();
+  }
+  renderer.prewarmUiMetadata(metadataText, metadataTextCount);
+
   renderer.clearScreen();
 
   const auto pageWidth = renderer.getScreenWidth();

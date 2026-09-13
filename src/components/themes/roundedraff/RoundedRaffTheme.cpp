@@ -89,8 +89,9 @@ void RoundedRaffTheme::drawHeader(const GfxRenderer& renderer, Rect rect, const 
   }
 
   const int maxTitleWidth = std::max(0, batteryGroupLeftX - 20 - titleX);
-  auto headerTitle = renderer.truncatedText(kTitleFontId, title, maxTitleWidth, EpdFontFamily::BOLD);
-  renderer.drawText(kTitleFontId, titleX, titleY, headerTitle.c_str(), true, EpdFontFamily::BOLD);
+  const int titleFont = renderer.uiMetadataFontForText(kTitleFontId, title);
+  auto headerTitle = renderer.truncatedText(titleFont, title, maxTitleWidth, EpdFontFamily::BOLD);
+  renderer.drawText(titleFont, titleX, titleY, headerTitle.c_str(), true, EpdFontFamily::BOLD);
   drawBatteryRight(
       renderer,
       Rect{batteryIconX, batteryY, RoundedRaffMetrics::values.batteryWidth, RoundedRaffMetrics::values.batteryHeight},
@@ -428,28 +429,33 @@ void RoundedRaffTheme::drawList(const GfxRenderer& renderer, Rect rect, int item
 
     if (hasSubtitle) {
       const std::string subtitleRaw = rowSubtitle(i);
-      auto title = renderer.truncatedText(kTitleFontId, rowTitle(i).c_str(), textAreaWidth, EpdFontFamily::BOLD);
+      const std::string titleRaw = rowTitle(i);
+      const int titleFont = renderer.uiMetadataFontForText(kTitleFontId, titleRaw.c_str());
+      const int subtitleFont = renderer.uiMetadataFontForText(kSubtitleFontId, subtitleRaw.c_str());
+      auto title = renderer.truncatedText(titleFont, titleRaw.c_str(), textAreaWidth, EpdFontFamily::BOLD);
 
       if (subtitleRaw.empty()) {
         // If there is no subtitle/author, center title vertically in the full row.
-        const int centeredTitleY = rowY + (currentRowHeight - titleLineHeight) / 2;
-        renderer.drawText(kTitleFontId, rowX + kInteractiveInsetX, centeredTitleY, title.c_str(), !isSelected,
+        const int centeredTitleY = rowY + (currentRowHeight - renderer.getLineHeight(titleFont)) / 2;
+        renderer.drawText(titleFont, rowX + kInteractiveInsetX, centeredTitleY, title.c_str(), !isSelected,
                           EpdFontFamily::BOLD);
       } else {
         const int titleY = rowY + subtitleTopPadding;
-        const int subtitleY = titleY + titleLineHeight + subtitleInterLineGap;
+        const int subtitleY = titleY + renderer.getLineHeight(titleFont) + subtitleInterLineGap;
         auto subtitle =
-            renderer.truncatedText(kSubtitleFontId, subtitleRaw.c_str(), textAreaWidth, EpdFontFamily::REGULAR);
-        renderer.drawText(kTitleFontId, rowX + kInteractiveInsetX, titleY, title.c_str(), !isSelected,
+            renderer.truncatedText(subtitleFont, subtitleRaw.c_str(), textAreaWidth, EpdFontFamily::REGULAR);
+        renderer.drawText(titleFont, rowX + kInteractiveInsetX, titleY, title.c_str(), !isSelected,
                           EpdFontFamily::BOLD);
-        renderer.drawText(kSubtitleFontId, rowX + kInteractiveInsetX, subtitleY, subtitle.c_str(), !isSelected,
+        renderer.drawText(subtitleFont, rowX + kInteractiveInsetX, subtitleY, subtitle.c_str(), !isSelected,
                           EpdFontFamily::REGULAR);
       }
     } else {
-      auto title = renderer.truncatedText(kTitleFontId, rowTitle(i).c_str(), textAreaWidth, EpdFontFamily::BOLD);
-      renderer.drawText(kTitleFontId, rowX + kInteractiveInsetX,
-                        rowY + (currentRowHeight - renderer.getLineHeight(kTitleFontId)) / 2, title.c_str(),
-                        !isSelected, EpdFontFamily::BOLD);
+      const std::string titleRaw = rowTitle(i);
+      const int titleFont = renderer.uiMetadataFontForText(kTitleFontId, titleRaw.c_str());
+      auto title = renderer.truncatedText(titleFont, titleRaw.c_str(), textAreaWidth, EpdFontFamily::BOLD);
+      renderer.drawText(titleFont, rowX + kInteractiveInsetX,
+                        rowY + (currentRowHeight - renderer.getLineHeight(titleFont)) / 2, title.c_str(), !isSelected,
+                        EpdFontFamily::BOLD);
     }
   }
 

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -43,6 +44,9 @@ class SdCardFont {
   // When metadataOnly=true, only glyph metrics are loaded (no bitmap data).
   // Returns number of glyphs that couldn't be loaded (0 on full success).
   int prewarm(const char* utf8Text, uint8_t styleMask = 0x0F, bool metadataOnly = false);
+  // Multi-string variant used by UI metadata. It collects unique codepoints
+  // directly from the supplied strings, avoiding a concatenation buffer.
+  int prewarm(const char* const* utf8Texts, size_t textCount, uint8_t styleMask = 0x0F, bool metadataOnly = false);
 
   // Build a compact advance-only table for layout measurement.
   // Extracts ALL unique codepoints from words (no MAX_PAGE_GLYPHS cap),

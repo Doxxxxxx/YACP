@@ -1,9 +1,9 @@
 #include "GfxRenderer.h"
 
 #include <BidiUtils.h>
-#include <InflateReader.h>  // Direct for PlatformIO's chain LDF; FontDecompressor embeds one.
 #include <FontDecompressor.h>
 #include <HalGPIO.h>
+#include <InflateReader.h>  // Direct for PlatformIO's chain LDF; FontDecompressor embeds one.
 #include <Logging.h>
 #include <SdCardFont.h>
 #include <Utf8.h>
@@ -1975,6 +1975,33 @@ void GfxRenderer::displayBuffer(const HalDisplay::RefreshMode refreshMode, const
   auto elapsed = millis() - start_ms;
   LOG_DBG("GFX", "Time = %lu ms from clearScreen to displayBuffer", elapsed);
   display.displayBuffer(refreshMode, displayPowerSaving || turnOffScreen);
+}
+
+int GfxRenderer::uiMetadataFontForText(const int fallbackFontId, const char* text) const {
+  return uiMetadataFontId_ != 0 && utf8ContainsCjk(text) && isSdCardFont(uiMetadataFontId_) ? uiMetadataFontId_
+                                                                                            : fallbackFontId;
+}
+
+bool GfxRenderer::prewarmUiMetadata(const char* const* texts, const size_t textCount, const uint8_t styleMask) const {
+  if (uiMetadataFontId_ == 0 || !texts || textCount == 0) return true;
+
+  bool hasCjk = false;
+  for (size_t i = 0; i < textCount; ++i) {
+    if (utf8ContainsCjk(texts[i])) {
+      hasCjk = true;
+      break;
+    }
+  }
+  if (!hasCjk) return true;
+
+  const auto it = sdCardFonts_.find(uiMetadataFontId_);
+  if (it == sdCardFonts_.end()) return false;
+
+  const int missed = it->second->prewarm(texts, textCount, styleMask);
+  if (missed > 0) {
+    LOG_DBG("GFX", "prewarmUiMetadata: %d glyph(s) not found", missed);
+  }
+  return !it->second->lastPrewarmFailed();
 }
 
 void GfxRenderer::displayBufferIntermediate(const HalDisplay::RefreshMode refreshMode) const {

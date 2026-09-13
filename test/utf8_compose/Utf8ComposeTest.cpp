@@ -52,3 +52,20 @@ TEST(Utf8ComposeNfc, ComposesWithinWord) {
   // "Ti" + e+circ+acute + "ng" -> "Tiếng"
   EXPECT_EQ(utf8ComposeNfc("Ti" + std::string("e") + kCombCirc + kCombAcute + "ng"), "Ti\xE1\xBA\xBFng");
 }
+
+TEST(Utf8ContainsCjk, DetectsTraditionalChineseAndMixedTitles) {
+  EXPECT_TRUE(utf8ContainsCjk("\xE4\xB8\xAD\xE6\x96\x87\xE6\x9B\xB8\xE5\x90\x8D"));
+  EXPECT_TRUE(utf8ContainsCjk("Volume 2 - \xE6\x9B\xB8"));
+}
+
+TEST(Utf8ContainsCjk, DetectsJapaneseAndKorean) {
+  EXPECT_TRUE(utf8ContainsCjk("\xE3\x81\x82"));              // U+3042 HIRAGANA LETTER A
+  EXPECT_TRUE(utf8ContainsCjk("\xED\x95\x9C\xEA\xB8\x80"));  // Hangul
+}
+
+TEST(Utf8ContainsCjk, RejectsEmptyLatinAndCyrillicText) {
+  EXPECT_FALSE(utf8ContainsCjk(nullptr));
+  EXPECT_FALSE(utf8ContainsCjk(""));
+  EXPECT_FALSE(utf8ContainsCjk("The Book"));
+  EXPECT_FALSE(utf8ContainsCjk("\xD0\x9A\xD0\xBD\xD0\xB8\xD0\xB3\xD0\xB0"));
+}

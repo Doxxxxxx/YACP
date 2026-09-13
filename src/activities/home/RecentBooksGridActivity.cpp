@@ -20,6 +20,7 @@
 #include "MappedInputManager.h"
 #include "RecentBookProgress.h"
 #include "RecentBooksStore.h"
+#include "SdCardFontSystem.h"
 #include "activities/reader/EpubReaderActivity.h"
 #include "activities/util/ConfirmationActivity.h"
 #include "activities/util/OptionSelectionActivity.h"
@@ -303,6 +304,7 @@ void RecentBooksGridActivity::loadPageCovers(int pageStart) {
 void RecentBooksGridActivity::onEnter() {
   Activity::onEnter();
   loadRecentBooks();
+  sdFontSystem.ensureUiMetadataFontLoaded(renderer);
   selectorIndex = 0;
   loadedPageStart = NO_PAGE_LOADED;
   ensureProgressLoaded(selectorIndex);
@@ -311,6 +313,8 @@ void RecentBooksGridActivity::onEnter() {
 
 void RecentBooksGridActivity::onExit() {
   Activity::onExit();
+  sdFontSystem.releaseLoadedFont(renderer);
+  sdFontSystem.releaseRegistry();
   recentBooks.clear();
 }
 
@@ -547,6 +551,11 @@ void RecentBooksGridActivity::showBookActionMenu(const int bookIndex, const bool
 }
 
 void RecentBooksGridActivity::render(RenderLock&&) {
+  if (!recentBooks.empty() && selectorIndex >= 0 && selectorIndex < static_cast<int>(recentBooks.size())) {
+    const char* metadataText[] = {recentBooks[selectorIndex].book.title.c_str()};
+    renderer.prewarmUiMetadata(metadataText, 1, 0x01);
+  }
+
   renderer.clearScreen();
 
   const auto pageWidth = renderer.getScreenWidth();
@@ -596,11 +605,12 @@ void RecentBooksGridActivity::render(RenderLock&&) {
       const int progressSuffixWidth =
           hasProgress ? separatorWidth + progressWidth + progressIconGap + progressIconSize : 0;
       const int titleMaxWidth = std::max(0, totalGridWidth - progressSuffixWidth);
+      const int titleFont = renderer.uiMetadataFontForText(UI_10_FONT_ID, selectedBook.book.title.c_str());
       const std::string truncTitle =
-          renderer.truncatedText(UI_10_FONT_ID, selectedBook.book.title.c_str(), titleMaxWidth, EpdFontFamily::REGULAR);
-      renderer.drawText(UI_10_FONT_ID, startXOffset, titleY, truncTitle.c_str(), true, EpdFontFamily::REGULAR);
+          renderer.truncatedText(titleFont, selectedBook.book.title.c_str(), titleMaxWidth, EpdFontFamily::REGULAR);
+      renderer.drawText(titleFont, startXOffset, titleY, truncTitle.c_str(), true, EpdFontFamily::REGULAR);
       if (hasProgress) {
-        const int titleWidth = renderer.getTextWidth(UI_10_FONT_ID, truncTitle.c_str(), EpdFontFamily::REGULAR);
+        const int titleWidth = renderer.getTextWidth(titleFont, truncTitle.c_str(), EpdFontFamily::REGULAR);
         int progressX = startXOffset + titleWidth;
         progressX = std::min(progressX, startXOffset + totalGridWidth - progressSuffixWidth);
         renderer.drawText(UI_10_FONT_ID, progressX, titleY, progressSeparator, true, EpdFontFamily::REGULAR);

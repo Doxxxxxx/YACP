@@ -22,6 +22,11 @@ class SdCardFontSystem {
   /// Built-in fonts return without touching the SD-card font directories.
   void ensureLoaded(GfxRenderer& renderer);
 
+  /// Load the selected SD family at the size closest to the compact UI and
+  /// register it as the CJK metadata font. Returns 0 when no SD family is
+  /// selected or loading fails. The catalogue is released before returning.
+  int ensureUiMetadataFontLoaded(GfxRenderer& renderer);
+
   /// Temporarily unload the active SD font without clearing the saved setting.
   /// Call ensureLoaded() later to restore it before reader rendering.
   void releaseLoadedFont(GfxRenderer& renderer);

@@ -1,7 +1,9 @@
 #pragma once
 #include <Epub.h>
 
+#include <cstddef>
 #include <memory>
+#include <vector>
 
 #include "activities/Activity.h"
 #include "util/ButtonNavigator.h"
@@ -12,6 +14,12 @@ class EpubReaderChapterSelectionActivity final : public Activity {
   ButtonNavigator buttonNavigator;
   int currentSpineIndex = 0;
   int selectorIndex = 0;
+  std::vector<std::string> visibleMetadataTitles;
+  int metadataPageStart = -1;
+
+  static constexpr std::size_t MAX_VISIBLE_METADATA_TITLES = 32;
+
+  void prewarmVisibleMetadata(int pageItems);
 
   // Number of items that fit on a page, derived from logical screen height.
   // This adapts automatically when switching between portrait and landscape.

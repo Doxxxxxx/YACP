@@ -301,6 +301,12 @@ to the reader status bar with the `Battery Current` setting.
 The screenshot uses deterministic generated data and contains no personal history. Reproduction commands are in the
 [simulator guide](docs/simulator.md).
 
+### Offline dictionary
+
+The EPUB reader can look up a selected word in a prepared StarDict dictionary. Discovery, SD access, and lookup happen
+only after the user requests a definition. The normal reading, page-turn, startup, and Quick Resume paths do no
+dictionary work. See the [dictionary setup guide](docs/dictionary.md) for supported files and preparation.
+
 ## Baseline and scope
 
 YACP inherits a substantial CrossInk baseline, including EPUB reliability work, reader controls, bookmarks, clippings,

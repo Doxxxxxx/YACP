@@ -326,33 +326,35 @@ void drawMissingBookCover(const GfxRenderer& renderer, const Rect& coverRect, co
   constexpr int titleAuthorGap = 28;
   const int textW = placeholderRect.width - textPadding * 2;
   const std::string& titleText = book.title.empty() ? book.path : book.title;
-  const int titleLineHeight = renderer.getLineHeight(UI_12_FONT_ID);
-  const int authorLineHeight = renderer.getLineHeight(UI_10_FONT_ID);
+  const int titleFont = renderer.uiMetadataFontForText(UI_12_FONT_ID, titleText.c_str());
+  const int authorFont = renderer.uiMetadataFontForText(UI_10_FONT_ID, book.author.c_str());
+  const int titleLineHeight = renderer.getLineHeight(titleFont);
+  const int authorLineHeight = renderer.getLineHeight(authorFont);
   const bool hasAuthor = !book.author.empty();
   auto authorLines =
-      hasAuthor ? renderer.wrappedText(UI_10_FONT_ID, book.author.c_str(), textW, 2) : std::vector<std::string>{};
+      hasAuthor ? renderer.wrappedText(authorFont, book.author.c_str(), textW, 2) : std::vector<std::string>{};
   const int lowerAreaHeight = placeholderRect.y + placeholderRect.height - dividerY;
   const int authorBlockHeight = authorLineHeight * static_cast<int>(authorLines.size());
   const int authorGap = authorLines.empty() ? 0 : titleAuthorGap;
   const int availableTitleHeight = lowerAreaHeight - textVerticalPadding * 2 - authorBlockHeight - authorGap;
   const int maxTitleLines = std::clamp(availableTitleHeight / titleLineHeight, 1, 4);
-  auto titleLines = renderer.wrappedText(UI_12_FONT_ID, titleText.c_str(), textW, maxTitleLines);
+  auto titleLines = renderer.wrappedText(titleFont, titleText.c_str(), textW, maxTitleLines);
 
   const int titleBlockHeight = titleLineHeight * static_cast<int>(titleLines.size());
   const int totalTextHeight = titleBlockHeight + authorBlockHeight + authorGap;
   int textY = dividerY + std::max(textVerticalPadding, (lowerAreaHeight - totalTextHeight) / 2);
 
   for (const auto& line : titleLines) {
-    const int lineW = renderer.getTextWidth(UI_12_FONT_ID, line.c_str());
-    renderer.drawText(UI_12_FONT_ID, placeholderRect.x + (placeholderRect.width - lineW) / 2, textY, line.c_str());
+    const int lineW = renderer.getTextWidth(titleFont, line.c_str());
+    renderer.drawText(titleFont, placeholderRect.x + (placeholderRect.width - lineW) / 2, textY, line.c_str());
     textY += titleLineHeight;
   }
 
   if (!authorLines.empty()) {
     textY += titleAuthorGap;
     for (const auto& line : authorLines) {
-      const int lineW = renderer.getTextWidth(UI_10_FONT_ID, line.c_str());
-      renderer.drawText(UI_10_FONT_ID, placeholderRect.x + (placeholderRect.width - lineW) / 2, textY, line.c_str());
+      const int lineW = renderer.getTextWidth(authorFont, line.c_str());
+      renderer.drawText(authorFont, placeholderRect.x + (placeholderRect.width - lineW) / 2, textY, line.c_str());
       textY += authorLineHeight;
     }
   }
@@ -408,8 +410,9 @@ void MinimalTheme::drawHeader(const GfxRenderer& renderer, Rect rect, const char
   if (title) {
     constexpr int titleInsetX = 12;
     const int maxTitleWidth = batteryX - rect.x - titleInsetX - MinimalMetrics::values.contentSidePadding;
-    auto truncatedTitle = renderer.truncatedText(UI_12_FONT_ID, title, maxTitleWidth, EpdFontFamily::BOLD);
-    renderer.drawText(UI_12_FONT_ID, rect.x + titleInsetX, rect.y + MinimalMetrics::values.batteryBarHeight + 3,
+    const int titleFont = renderer.uiMetadataFontForText(UI_12_FONT_ID, title);
+    auto truncatedTitle = renderer.truncatedText(titleFont, title, maxTitleWidth, EpdFontFamily::BOLD);
+    renderer.drawText(titleFont, rect.x + titleInsetX, rect.y + MinimalMetrics::values.batteryBarHeight + 3,
                       truncatedTitle.c_str(), true, EpdFontFamily::BOLD);
     renderer.drawLine(rect.x, rect.y + rect.height - 3, rect.x + rect.width - 1, rect.y + rect.height - 3, 3, true);
   }
@@ -562,13 +565,16 @@ void MinimalTheme::drawCompactFileBrowserList(const GfxRenderer& renderer, Rect 
       renderer.drawIcon(iconBitmap, iconX, iconY, kFileBrowserIconSize, kFileBrowserIconSize);
     }
 
+    const std::string title = rowTitle(i);
+    const int titleFont = renderer.uiMetadataFontForText(UI_10_FONT_ID, title.c_str());
+    const int titleLineHeight = renderer.getLineHeight(titleFont);
     const int maxTitleLines = folderRow ? 1 : 2;
-    auto lines = renderer.wrappedText(UI_10_FONT_ID, rowTitle(i).c_str(), textWidth, maxTitleLines);
-    const int textBlockHeight = static_cast<int>(lines.size()) * lineHeight;
+    auto lines = renderer.wrappedText(titleFont, title.c_str(), textWidth, maxTitleLines);
+    const int textBlockHeight = static_cast<int>(lines.size()) * titleLineHeight;
     int textY = centeredRowY(itemY, rowHeight, textBlockHeight);
     for (const auto& line : lines) {
-      renderer.drawText(UI_10_FONT_ID, textX, textY, line.c_str(), true);
-      textY += lineHeight;
+      renderer.drawText(titleFont, textX, textY, line.c_str(), true);
+      textY += titleLineHeight;
     }
 
     if (!valueText.empty()) {

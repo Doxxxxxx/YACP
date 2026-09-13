@@ -172,13 +172,14 @@ EpubReaderMenuActivity::TabMenuItems EpubReaderMenuActivity::buildMenuItems(bool
   auto& bookmarkItems = items[BOOKMARKS_TAB_INDEX];
   auto& settingsItems = items[SETTINGS_TAB_INDEX];
 
-  mainItems.reserve(8 + (hasFootnotes ? 1u : 0u) + (hasBookGallery ? 1u : 0u));
+  mainItems.reserve(9 + (hasFootnotes ? 1u : 0u) + (hasBookGallery ? 1u : 0u));
   bookmarkItems.reserve(8 + (hasBookmarks ? 2u : 0u) + (hasClippings ? 1u : 0u));
   settingsItems.reserve(2 + (showReadingPaceReset ? 1u : 0u));
 
   if (hasFootnotes) {
     mainItems.push_back({MenuAction::FOOTNOTES, StrId::STR_FOOTNOTES});
   }
+  mainItems.push_back({MenuAction::DICTIONARY, StrId::STR_DICTIONARY});
   mainItems.push_back({MenuAction::SELECT_CHAPTER, StrId::STR_SELECT_CHAPTER});
   mainItems.push_back({MenuAction::READER_OPTIONS, StrId::STR_READER_OPTIONS});
   mainItems.push_back({MenuAction::CONTROLS_OPTIONS, StrId::STR_CAT_CONTROLS});
@@ -382,6 +383,9 @@ void EpubReaderMenuActivity::loop() {
 
 void EpubReaderMenuActivity::render(RenderLock&&) {
   if (optionPopup.processRender(renderer, mappedInput)) return;
+
+  const char* metadataText[] = {title.c_str()};
+  renderer.prewarmUiMetadata(metadataText, 1, 0x03);
 
   renderer.clearScreen();
 

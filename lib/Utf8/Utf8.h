@@ -44,6 +44,19 @@ inline bool utf8IsCjkBreakable(const uint32_t cp) {
          || (cp >= 0x2A700 && cp <= 0x2B73F);  // CJK Extension C
 }
 
+// Returns true when a UTF-8 string contains at least one CJK codepoint.
+// UI metadata uses this to select an optional SD-card font without changing
+// the built-in font used by fixed interface labels.
+inline bool utf8ContainsCjk(const char* text) {
+  if (!text) return false;
+
+  const auto* cursor = reinterpret_cast<const unsigned char*>(text);
+  while (const uint32_t cp = utf8NextCodepoint(&cursor)) {
+    if (utf8IsCjkBreakable(cp)) return true;
+  }
+  return false;
+}
+
 // Returns true for Unicode combining diacritical marks that should not advance the cursor.
 inline bool utf8IsCombiningMark(const uint32_t cp) {
   return (cp >= 0x0300 && cp <= 0x036F)      // Combining Diacritical Marks

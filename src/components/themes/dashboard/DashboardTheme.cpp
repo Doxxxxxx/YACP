@@ -124,12 +124,13 @@ void drawMissingBookCover(const GfxRenderer& renderer, const Rect& coverRect, co
   constexpr int textPadding = 14;
   const int textW = coverRect.width - textPadding * 2;
   const char* title = book.title.empty() ? book.path.c_str() : book.title.c_str();
-  auto titleLines = renderer.wrappedText(UI_12_FONT_ID, title, textW, 4, EpdFontFamily::BOLD);
-  const int lineH = renderer.getLineHeight(UI_12_FONT_ID);
+  const int titleFont = renderer.uiMetadataFontForText(UI_12_FONT_ID, title);
+  auto titleLines = renderer.wrappedText(titleFont, title, textW, 4, EpdFontFamily::BOLD);
+  const int lineH = renderer.getLineHeight(titleFont);
   int textY = coverRect.y + (coverRect.height - static_cast<int>(titleLines.size()) * lineH) / 2;
   for (const auto& line : titleLines) {
-    const int lineW = renderer.getTextWidth(UI_12_FONT_ID, line.c_str(), EpdFontFamily::BOLD);
-    renderer.drawText(UI_12_FONT_ID, coverRect.x + (coverRect.width - lineW) / 2, textY, line.c_str(), true,
+    const int lineW = renderer.getTextWidth(titleFont, line.c_str(), EpdFontFamily::BOLD);
+    renderer.drawText(titleFont, coverRect.x + (coverRect.width - lineW) / 2, textY, line.c_str(), true,
                       EpdFontFamily::BOLD);
     textY += lineH;
   }
@@ -243,11 +244,12 @@ int drawHomeTitle(const GfxRenderer& renderer, const Rect& card, const char* tit
   const int titleW = card.width - kHomeCardInnerPadding * 2;
   const int titleY = card.y + (compact ? 78 : 105);
   const int maxLines = compact ? 2 : 3;
-  const auto lines = renderer.wrappedText(kHomeDisplayFontId, title, titleW, maxLines, EpdFontFamily::BOLD);
-  const int lineH = renderer.getLineHeight(kHomeDisplayFontId);
+  const int titleFont = renderer.uiMetadataFontForText(kHomeDisplayFontId, title);
+  const auto lines = renderer.wrappedText(titleFont, title, titleW, maxLines, EpdFontFamily::BOLD);
+  const int lineH = renderer.getLineHeight(titleFont);
   int lineY = titleY;
   for (const auto& line : lines) {
-    renderer.drawText(kHomeDisplayFontId, titleX, lineY, line.c_str(), true, EpdFontFamily::BOLD);
+    renderer.drawText(titleFont, titleX, lineY, line.c_str(), true, EpdFontFamily::BOLD);
     lineY += lineH;
   }
   return lineY;
@@ -268,8 +270,9 @@ void drawHomeBookIdentity(const GfxRenderer& renderer, const Rect& card, const R
   int identityBottom = drawHomeTitle(renderer, card, title, compact);
   if (!book.author.empty()) {
     const int authorW = card.width - kHomeCardInnerPadding * 2;
-    const std::string author = renderer.truncatedText(UI_12_FONT_ID, book.author.c_str(), authorW);
-    renderer.drawText(UI_12_FONT_ID, card.x + kHomeCardInnerPadding, identityBottom + 10, author.c_str());
+    const int authorFont = renderer.uiMetadataFontForText(UI_12_FONT_ID, book.author.c_str());
+    const std::string author = renderer.truncatedText(authorFont, book.author.c_str(), authorW);
+    renderer.drawText(authorFont, card.x + kHomeCardInnerPadding, identityBottom + 10, author.c_str());
   }
 }
 
@@ -306,8 +309,7 @@ void drawHomeProgress(const GfxRenderer& renderer, const Rect& card, const BookR
     const int innerW = static_cast<int>((barW - 4) * clampedProgress / 100.0f + 0.5f);
     if (innerW > 0) {
       const int innerRadius = std::min((kHomeProgressBarHeight - 4) / 2, innerW / 2);
-      renderer.fillRoundedRect(contentX + 2, barY + 2, innerW, kHomeProgressBarHeight - 4,
-                               innerRadius, Color::Black);
+      renderer.fillRoundedRect(contentX + 2, barY + 2, innerW, kHomeProgressBarHeight - 4, innerRadius, Color::Black);
     }
   }
 
@@ -705,22 +707,25 @@ void drawBookText(const GfxRenderer& renderer, const Rect& coverRect, const Rece
   const int inset = contentInset(renderer);
   const int textW = renderer.getScreenWidth() - inset * 2;
   const char* title = book.title.empty() ? book.path.c_str() : book.title.c_str();
-  auto titleLines = renderer.wrappedText(UI_12_FONT_ID, title, textW, kBookTitleMaxLines, EpdFontFamily::BOLD);
+  const int titleFont = renderer.uiMetadataFontForText(UI_12_FONT_ID, title);
+  auto titleLines = renderer.wrappedText(titleFont, title, textW, kBookTitleMaxLines, EpdFontFamily::BOLD);
   int textY = coverRect.y + coverRect.height + kTitleTopGap;
-  const int titleLineH = renderer.getLineHeight(UI_12_FONT_ID);
+  const int titleLineH = renderer.getLineHeight(titleFont);
   for (const auto& line : titleLines) {
-    renderer.drawText(UI_12_FONT_ID, coverRect.x, textY, line.c_str(), black, EpdFontFamily::BOLD);
+    renderer.drawText(titleFont, coverRect.x, textY, line.c_str(), black, EpdFontFamily::BOLD);
     textY += titleLineH;
   }
 
   const char* subtitle =
       (currentChapterTitle != nullptr && currentChapterTitle[0] != '\0') ? currentChapterTitle : book.author.c_str();
   if (subtitle != nullptr && subtitle[0] != '\0') {
-    auto subtitleLines = renderer.wrappedText(UI_12_FONT_ID, subtitle, textW, kBookChapterMaxLines);
+    const int subtitleFont = renderer.uiMetadataFontForText(UI_12_FONT_ID, subtitle);
+    auto subtitleLines = renderer.wrappedText(subtitleFont, subtitle, textW, kBookChapterMaxLines);
+    const int subtitleLineH = renderer.getLineHeight(subtitleFont);
     int subtitleY = textY + kTitleChapterGap;
     for (const auto& line : subtitleLines) {
-      renderer.drawText(UI_12_FONT_ID, coverRect.x, subtitleY, line.c_str(), black);
-      subtitleY += titleLineH;
+      renderer.drawText(subtitleFont, coverRect.x, subtitleY, line.c_str(), black);
+      subtitleY += subtitleLineH;
     }
   }
 }
@@ -741,10 +746,9 @@ void DashboardTheme::drawHeader(const GfxRenderer& renderer, Rect rect, const ch
       SETTINGS.hideBatteryPercentage != CrossPointSettings::HIDE_BATTERY_PERCENTAGE::HIDE_ALWAYS;
   const int batteryX = rect.x + rect.width - kHomeCardInset - DashboardMetrics::values.batteryWidth;
   const int batteryY = rect.y + (rect.height - DashboardMetrics::values.batteryHeight) / 2;
-  drawBatteryRight(renderer,
-                   Rect{batteryX, batteryY, DashboardMetrics::values.batteryWidth,
-                        DashboardMetrics::values.batteryHeight},
-                   showBatteryPercentage);
+  drawBatteryRight(
+      renderer, Rect{batteryX, batteryY, DashboardMetrics::values.batteryWidth, DashboardMetrics::values.batteryHeight},
+      showBatteryPercentage);
   drawTopStatusBarClock(renderer, rect.y, nullptr, false, 3);
 }
 
@@ -829,8 +833,7 @@ void DashboardTheme::drawButtonMenu(GfxRenderer& renderer, Rect rect, const int 
 void DashboardTheme::drawButtonHints(GfxRenderer& renderer, const char* btn1, const char* btn2, const char* btn3,
                                      const char* btn4, const bool allowInvertedText) const {
   const GfxRenderer::Orientation originalOrientation = renderer.getOrientation();
-  const bool invertText =
-      allowInvertedText && originalOrientation == GfxRenderer::Orientation::PortraitInverted;
+  const bool invertText = allowInvertedText && originalOrientation == GfxRenderer::Orientation::PortraitInverted;
   renderer.setOrientation(GfxRenderer::Orientation::Portrait);
 
   const int pageWidth = renderer.getScreenWidth();
@@ -855,18 +858,15 @@ void DashboardTheme::drawButtonHints(GfxRenderer& renderer, const char* btn1, co
   renderer.drawRoundedRect(rightGroupX, outlineY, groupWidth, hintHeight, 2, kHomeHintRadius, true);
 
   constexpr int innerPadding = 16;
-  const int labelWidths[] = {renderer.getTextWidth(SMALL_FONT_ID, labels[0]),
-                             renderer.getTextWidth(SMALL_FONT_ID, labels[1]),
-                             renderer.getTextWidth(SMALL_FONT_ID, labels[2]),
-                             renderer.getTextWidth(SMALL_FONT_ID, labels[3])};
+  const int labelWidths[] = {
+      renderer.getTextWidth(SMALL_FONT_ID, labels[0]), renderer.getTextWidth(SMALL_FONT_ID, labels[1]),
+      renderer.getTextWidth(SMALL_FONT_ID, labels[2]), renderer.getTextWidth(SMALL_FONT_ID, labels[3])};
   const int labelX[] = {leftGroupX + innerPadding, leftGroupX + groupWidth - innerPadding - labelWidths[1],
                         rightGroupX + innerPadding, rightGroupX + groupWidth - innerPadding - labelWidths[3]};
 
-  renderer.setOrientation(invertText ? GfxRenderer::Orientation::PortraitInverted
-                                     : GfxRenderer::Orientation::Portrait);
+  renderer.setOrientation(invertText ? GfxRenderer::Orientation::PortraitInverted : GfxRenderer::Orientation::Portrait);
   const int textY =
-      (invertText ? kHomeHintBottomMargin : outlineY) +
-      (hintHeight - renderer.getLineHeight(SMALL_FONT_ID)) / 2;
+      (invertText ? kHomeHintBottomMargin : outlineY) + (hintHeight - renderer.getLineHeight(SMALL_FONT_ID)) / 2;
   for (int i = 0; i < 4; ++i) {
     if (labels[i][0] != '\0') {
       renderer.drawText(SMALL_FONT_ID, labelX[i], textY, labels[i]);

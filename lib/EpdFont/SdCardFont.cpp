@@ -704,8 +704,13 @@ bool SdCardFont::readAdvance(uint32_t codepoint, uint8_t style, uint16_t* outAdv
 // --- Prewarm ---
 
 int SdCardFont::prewarm(const char* utf8Text, uint8_t styleMask, bool metadataOnly) {
+  const char* texts[] = {utf8Text};
+  return prewarm(texts, 1, styleMask, metadataOnly);
+}
+
+int SdCardFont::prewarm(const char* const* utf8Texts, const size_t textCount, uint8_t styleMask, bool metadataOnly) {
   lastPrewarmFailed_ = false;
-  if (!loaded_) return failPrewarm(-1);
+  if (!loaded_ || !utf8Texts || textCount == 0) return failPrewarm(-1);
   styleMask = resolveStyleMask(styleMask);
   if (styleMask == 0) return 0;
 
@@ -724,20 +729,24 @@ int SdCardFont::prewarm(const char* utf8Text, uint8_t styleMask, bool metadataOn
   }
   uint32_t cpCount = 0;
 
-  const unsigned char* p = reinterpret_cast<const unsigned char*>(utf8Text);
-  while (*p && cpCount < MAX_PAGE_GLYPHS) {
-    uint32_t cp = utf8NextCodepoint(&p);
-    if (cp == 0) break;
+  for (size_t textIndex = 0; textIndex < textCount && cpCount < MAX_PAGE_GLYPHS; ++textIndex) {
+    if (!utf8Texts[textIndex]) continue;
 
-    bool found = false;
-    for (uint32_t i = 0; i < cpCount; i++) {
-      if (codepoints[i] == cp) {
-        found = true;
-        break;
+    const unsigned char* p = reinterpret_cast<const unsigned char*>(utf8Texts[textIndex]);
+    while (*p && cpCount < MAX_PAGE_GLYPHS) {
+      uint32_t cp = utf8NextCodepoint(&p);
+      if (cp == 0) break;
+
+      bool found = false;
+      for (uint32_t i = 0; i < cpCount; i++) {
+        if (codepoints[i] == cp) {
+          found = true;
+          break;
+        }
       }
-    }
-    if (!found) {
-      codepoints[cpCount++] = cp;
+      if (!found) {
+        codepoints[cpCount++] = cp;
+      }
     }
   }
 

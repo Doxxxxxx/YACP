@@ -118,6 +118,7 @@ class HomeActivity final : public Activity {
   void loadRecentBooks(int maxBooks, bool resolveCoverPaths);
   void loadAllBookStats();
   void loadRecentCovers(int coverHeight);
+  void prewarmUiMetadata();
 
  public:
   explicit HomeActivity(GfxRenderer& renderer, MappedInputManager& mappedInput,

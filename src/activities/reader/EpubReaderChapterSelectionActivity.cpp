@@ -3,11 +3,39 @@
 #include <GfxRenderer.h>
 #include <I18n.h>
 
+#include <algorithm>
+
 #include "MappedInputManager.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
 
 int EpubReaderChapterSelectionActivity::getTotalItems() const { return epub->getTocItemsCount(); }
+
+int EpubReaderChapterSelectionActivity::getPageItems() const {
+  return std::max(1, UITheme::getInstance().getNumberOfItemsPerPage(renderer, true, false, true, false));
+}
+
+void EpubReaderChapterSelectionActivity::prewarmVisibleMetadata(const int pageItems) {
+  if (pageItems <= 0) return;
+
+  const int pageStart = selectorIndex / pageItems * pageItems;
+  if (pageStart != metadataPageStart) {
+    visibleMetadataTitles.clear();
+    const int visibleCount = std::min(pageItems, static_cast<int>(MAX_VISIBLE_METADATA_TITLES));
+    const int pageEnd = std::min(getTotalItems(), pageStart + visibleCount);
+    for (int index = pageStart; index < pageEnd; ++index) {
+      visibleMetadataTitles.push_back(epub->getTocItem(index).title);
+    }
+    metadataPageStart = pageStart;
+  }
+
+  const char* metadataText[MAX_VISIBLE_METADATA_TITLES] = {};
+  std::size_t metadataTextCount = 0;
+  for (const auto& title : visibleMetadataTitles) {
+    metadataText[metadataTextCount++] = title.c_str();
+  }
+  renderer.prewarmUiMetadata(metadataText, metadataTextCount, 0x01);
+}
 
 void EpubReaderChapterSelectionActivity::onEnter() {
   Activity::onEnter();
@@ -16,6 +44,7 @@ void EpubReaderChapterSelectionActivity::onEnter() {
     return;
   }
 
+  visibleMetadataTitles.reserve(MAX_VISIBLE_METADATA_TITLES);
   selectorIndex = epub->getTocIndexForSpineIndex(currentSpineIndex);
   if (selectorIndex == -1) {
     selectorIndex = 0;
@@ -28,7 +57,7 @@ void EpubReaderChapterSelectionActivity::onEnter() {
 void EpubReaderChapterSelectionActivity::onExit() { Activity::onExit(); }
 
 void EpubReaderChapterSelectionActivity::loop() {
-  const int pageItems = UITheme::getInstance().getNumberOfItemsPerPage(renderer, true, false, true, false);
+  const int pageItems = getPageItems();
   const int totalItems = getTotalItems();
 
   if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
@@ -81,6 +110,7 @@ void EpubReaderChapterSelectionActivity::render(RenderLock&&) {
 
   const int contentTop = screen.y + metrics.topPadding + metrics.headerHeight + metrics.verticalSpacing;
   const int contentHeight = screen.height - contentTop - metrics.verticalSpacing;
+  prewarmVisibleMetadata(getPageItems());
 
   const int totalItems = getTotalItems();
   GUI.drawList(renderer, Rect{screen.x, contentTop, screen.width, contentHeight}, totalItems, selectorIndex,

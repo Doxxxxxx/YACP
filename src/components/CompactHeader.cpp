@@ -17,12 +17,12 @@ constexpr int kHeaderBaselineLift = 2;
 
 int visibleHeaderHeight(const ThemeMetrics& metrics) { return std::min(metrics.headerHeight, kHeaderHeight); }
 
-int titleBaselineY(const GfxRenderer& renderer, const ThemeMetrics& metrics) {
+int titleBaselineY(const GfxRenderer& renderer, const ThemeMetrics& metrics, const int fontId) {
   const int availableH = visibleHeaderHeight(metrics) - metrics.batteryBarHeight;
-  const int titleLineHeight = renderer.getLineHeight(UI_12_FONT_ID);
+  const int titleLineHeight = renderer.getLineHeight(fontId);
   const int titleY =
       metrics.topPadding + metrics.batteryBarHeight + (availableH - titleLineHeight) / 2 - kHeaderTitleLift;
-  return titleY + renderer.getFontAscenderSize(UI_12_FONT_ID) - kHeaderBaselineLift;
+  return titleY + renderer.getFontAscenderSize(fontId) - kHeaderBaselineLift;
 }
 }  // namespace
 
@@ -41,11 +41,12 @@ void drawTitle(const GfxRenderer& renderer, const char* title, const bool showDa
   const int dateStartX = showDate ? pageWidth - headerDateReservedWidth(renderer) : pageWidth;
   const int titleRightX = std::min(batteryStartX, dateStartX) - metrics.contentSidePadding;
   const int maxTitleWidth = std::max(1, titleRightX - titleX);
-  const int baselineY = titleBaselineY(renderer, metrics);
-  const std::string visibleTitle = renderer.truncatedText(UI_12_FONT_ID, title, maxTitleWidth, EpdFontFamily::BOLD);
+  const int titleFontId = renderer.uiMetadataFontForText(UI_12_FONT_ID, title);
+  const int baselineY = titleBaselineY(renderer, metrics, titleFontId);
+  const std::string visibleTitle = renderer.truncatedText(titleFontId, title, maxTitleWidth, EpdFontFamily::BOLD);
 
-  renderer.drawText(UI_12_FONT_ID, titleX, baselineY - renderer.getFontAscenderSize(UI_12_FONT_ID),
-                    visibleTitle.c_str(), true, EpdFontFamily::BOLD);
+  renderer.drawText(titleFontId, titleX, baselineY - renderer.getFontAscenderSize(titleFontId), visibleTitle.c_str(),
+                    true, EpdFontFamily::BOLD);
   if (showDate) {
     drawHeaderDateAtBaseline(renderer, pageWidth, baselineY);
   }
@@ -56,11 +57,12 @@ void drawTitleWithoutStatus(const GfxRenderer& renderer, const char* title) {
   const int pageWidth = renderer.getScreenWidth();
   const int titleX = metrics.contentSidePadding;
   const int maxTitleWidth = std::max(1, pageWidth - titleX - metrics.contentSidePadding);
-  const int baselineY = titleBaselineY(renderer, metrics);
-  const std::string visibleTitle = renderer.truncatedText(UI_12_FONT_ID, title, maxTitleWidth, EpdFontFamily::BOLD);
+  const int titleFontId = renderer.uiMetadataFontForText(UI_12_FONT_ID, title);
+  const int baselineY = titleBaselineY(renderer, metrics, titleFontId);
+  const std::string visibleTitle = renderer.truncatedText(titleFontId, title, maxTitleWidth, EpdFontFamily::BOLD);
 
-  renderer.drawText(UI_12_FONT_ID, titleX, baselineY - renderer.getFontAscenderSize(UI_12_FONT_ID),
-                    visibleTitle.c_str(), true, EpdFontFamily::BOLD);
+  renderer.drawText(titleFontId, titleX, baselineY - renderer.getFontAscenderSize(titleFontId), visibleTitle.c_str(),
+                    true, EpdFontFamily::BOLD);
   const int separatorY = headerBottomY(metrics) - 1;
   renderer.drawLine(0, separatorY, pageWidth, separatorY);
 }

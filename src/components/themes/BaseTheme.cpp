@@ -331,7 +331,7 @@ void BaseTheme::drawList(const GfxRenderer& renderer, Rect rect, int itemCount, 
     }
 
     auto itemName = rowTitle(i);
-    auto font = UI_10_FONT_ID;
+    const int font = renderer.uiMetadataFontForText(UI_10_FONT_ID, itemName.c_str());
     auto item = renderer.truncatedText(font, itemName.c_str(), rowTextWidth);
     if (isHeader && isHeader(i)) {
       renderer.drawText(font, rect.x + BaseMetrics::values.contentSidePadding, itemY, item.c_str(), true,
@@ -353,8 +353,9 @@ void BaseTheme::drawList(const GfxRenderer& renderer, Rect rect, int itemCount, 
     if (rowSubtitle != nullptr) {
       std::string subtitleText = rowSubtitle(i);
       if (!subtitleText.empty()) {
-        auto subtitle = renderer.truncatedText(SMALL_FONT_ID, subtitleText.c_str(), rowTextWidth);
-        renderer.drawText(SMALL_FONT_ID, rect.x + BaseMetrics::values.contentSidePadding, itemY + 22, subtitle.c_str(),
+        const int subtitleFont = renderer.uiMetadataFontForText(SMALL_FONT_ID, subtitleText.c_str());
+        auto subtitle = renderer.truncatedText(subtitleFont, subtitleText.c_str(), rowTextWidth);
+        renderer.drawText(subtitleFont, rect.x + BaseMetrics::values.contentSidePadding, itemY + 22, subtitle.c_str(),
                           i != selectedIndex);
       }
     }
@@ -389,24 +390,25 @@ void BaseTheme::drawHeader(const GfxRenderer& renderer, Rect rect, const char* t
 
   if (title) {
     int padding = rect.width - batteryX + BaseMetrics::values.batteryWidth;
-    auto truncatedTitle = renderer.truncatedText(UI_12_FONT_ID, title,
-                                                 rect.width - padding * 2 - BaseMetrics::values.contentSidePadding * 2,
-                                                 EpdFontFamily::BOLD);
+    const int titleFont = renderer.uiMetadataFontForText(UI_12_FONT_ID, title);
+    auto truncatedTitle = renderer.truncatedText(
+        titleFont, title, rect.width - padding * 2 - BaseMetrics::values.contentSidePadding * 2, EpdFontFamily::BOLD);
     const bool showHeaderClock = halClock.isAvailable() && (readerContext ? SETTINGS.shouldShowClockInReader()
                                                                           : SETTINGS.shouldShowClockOutsideReader());
     if (showHeaderClock) {
-      renderer.drawText(UI_12_FONT_ID, rect.x + BaseMetrics::values.contentSidePadding, rect.y + 5,
-                        truncatedTitle.c_str(), true, EpdFontFamily::BOLD);
+      renderer.drawText(titleFont, rect.x + BaseMetrics::values.contentSidePadding, rect.y + 5, truncatedTitle.c_str(),
+                        true, EpdFontFamily::BOLD);
     } else {
-      renderer.drawCenteredText(UI_12_FONT_ID, rect.y + 5, truncatedTitle.c_str(), true, EpdFontFamily::BOLD);
+      renderer.drawCenteredText(titleFont, rect.y + 5, truncatedTitle.c_str(), true, EpdFontFamily::BOLD);
     }
   }
 
   if (subtitle) {
+    const int subtitleFont = renderer.uiMetadataFontForText(SMALL_FONT_ID, subtitle);
     auto truncatedSubtitle = renderer.truncatedText(
-        SMALL_FONT_ID, subtitle, rect.width - BaseMetrics::values.contentSidePadding * 2, EpdFontFamily::REGULAR);
-    int truncatedSubtitleWidth = renderer.getTextWidth(SMALL_FONT_ID, truncatedSubtitle.c_str());
-    renderer.drawText(SMALL_FONT_ID,
+        subtitleFont, subtitle, rect.width - BaseMetrics::values.contentSidePadding * 2, EpdFontFamily::REGULAR);
+    int truncatedSubtitleWidth = renderer.getTextWidth(subtitleFont, truncatedSubtitle.c_str());
+    renderer.drawText(subtitleFont,
                       rect.x + rect.width - BaseMetrics::values.contentSidePadding - truncatedSubtitleWidth, subtitleY,
                       truncatedSubtitle.c_str(), true);
   }
@@ -879,6 +881,10 @@ void BaseTheme::drawStatusBar(GfxRenderer& renderer, const float bookProgress, c
   // Draw Title
   if (!title.empty()) {
     textY -= textYOffset;
+    const int titleFont = renderer.uiMetadataFontForText(SMALL_FONT_ID, title.c_str());
+    const bool halfScaleTitle =
+        renderer.isSdCardFont(titleFont) && renderer.getLineHeight(titleFont) > metrics.statusBarVerticalMargin;
+    const auto titleStyle = halfScaleTitle ? EpdFontFamily::SUP : EpdFontFamily::REGULAR;
     // Centered chapter title text
     // Page width minus existing content with 30px padding on each side
     const int rendererableScreenWidth =
@@ -892,22 +898,25 @@ void BaseTheme::drawStatusBar(GfxRenderer& renderer, const float bookProgress, c
     int titleMarginLeftAdjusted = std::max(titleMarginLeft, titleMarginRight);
     int availableTitleSpace = rendererableScreenWidth - 2 * titleMarginLeftAdjusted;
 
-    int titleWidth;
-    titleWidth = renderer.getTextWidth(SMALL_FONT_ID, title.c_str());
+    int titleWidth = halfScaleTitle ? renderer.getTextAdvanceX(titleFont, title.c_str(), titleStyle)
+                                    : renderer.getTextWidth(titleFont, title.c_str());
     if (titleWidth > availableTitleSpace) {
       // Not enough space to center on the screen, center it within the remaining space instead
       availableTitleSpace = rendererableScreenWidth - titleMarginLeft - titleMarginRight;
       titleMarginLeftAdjusted = titleMarginLeft;
     }
     if (titleWidth > availableTitleSpace) {
-      title = renderer.truncatedText(SMALL_FONT_ID, title.c_str(), availableTitleSpace);
-      titleWidth = renderer.getTextWidth(SMALL_FONT_ID, title.c_str());
+      const int truncationWidth = halfScaleTitle ? availableTitleSpace * 2 : availableTitleSpace;
+      title = renderer.truncatedText(titleFont, title.c_str(), truncationWidth);
+      titleWidth = halfScaleTitle ? renderer.getTextAdvanceX(titleFont, title.c_str(), titleStyle)
+                                  : renderer.getTextWidth(titleFont, title.c_str());
     }
 
-    renderer.drawText(SMALL_FONT_ID,
+    const int titleY = halfScaleTitle ? textY - renderer.getFontAscenderSize(titleFont) / 2 : textY;
+    renderer.drawText(titleFont,
                       titleMarginLeftAdjusted + metrics.statusBarHorizontalMargin + orientedMarginLeft +
                           (availableTitleSpace - titleWidth) / 2,
-                      textY, title.c_str(), foregroundBlack);
+                      titleY, title.c_str(), foregroundBlack, titleStyle);
   }
 }
 

@@ -66,9 +66,10 @@ void FileBrowserActionActivity::render(RenderLock&&) {
   const auto pageHeight = renderer.getScreenHeight();
   const int titleX = metrics.contentSidePadding;
   const int titleMaxWidth = std::max(0, pageWidth - titleX - metrics.contentSidePadding - kBatteryTextReserveWidth);
+  const int titleFont = renderer.uiMetadataFontForText(kTitleFontId, title.c_str());
   const auto titleLines =
-      renderer.wrappedText(kTitleFontId, title.c_str(), titleMaxWidth, kTitleMaxLines, EpdFontFamily::BOLD);
-  const int titleLineHeight = renderer.getLineHeight(kTitleFontId);
+      renderer.wrappedText(titleFont, title.c_str(), titleMaxWidth, kTitleMaxLines, EpdFontFamily::BOLD);
+  const int titleLineHeight = renderer.getLineHeight(titleFont);
   const int titleBlockHeight = static_cast<int>(titleLines.size()) * titleLineHeight +
                                std::max(0, static_cast<int>(titleLines.size()) - 1) * kTitleLineGap;
   const bool tallHeader = metrics.headerHeight > 60;
@@ -79,7 +80,7 @@ void FileBrowserActionActivity::render(RenderLock&&) {
   GUI.drawHeader(renderer, Rect{0, metrics.topPadding, pageWidth, actionHeaderHeight}, "");
 
   for (int i = 0; i < static_cast<int>(titleLines.size()); ++i) {
-    renderer.drawText(kTitleFontId, titleX, titleY + i * (titleLineHeight + kTitleLineGap), titleLines[i].c_str(), true,
+    renderer.drawText(titleFont, titleX, titleY + i * (titleLineHeight + kTitleLineGap), titleLines[i].c_str(), true,
                       EpdFontFamily::BOLD);
   }
 

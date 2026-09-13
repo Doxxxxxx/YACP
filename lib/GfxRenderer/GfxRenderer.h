@@ -17,6 +17,7 @@ class FontCacheManager;
 class SdCardFont;
 
 #include <cassert>
+#include <cstddef>
 #include <cstring>
 #include <map>
 #include <string>
@@ -93,6 +94,7 @@ class GfxRenderer {
   // recording to the (non-const) FontCacheManager. Same pragmatic compromise
   // as before, concentrated in a single pointer instead of four fields.
   mutable FontCacheManager* fontCacheManager_ = nullptr;
+  int uiMetadataFontId_ = 0;
 
   void renderChar(const EpdFontFamily& fontFamily, uint32_t cp, int* x, int* y, bool pixelState,
                   EpdFontFamily::Style style) const;
@@ -143,6 +145,7 @@ class GfxRenderer {
   void removeFont(int fontId) {
     fontMap.erase(fontId);
     sdCardFonts_.erase(fontId);
+    if (uiMetadataFontId_ == fontId) uiMetadataFontId_ = 0;
   }
   void setFontCacheManager(FontCacheManager* m) { fontCacheManager_ = m; }
   FontCacheManager* getFontCacheManager() const { return fontCacheManager_; }
@@ -150,9 +153,17 @@ class GfxRenderer {
   const std::map<int, EpdFontFamily>& getFontMap() const { return fontMap; }
   void registerSdCardFont(int fontId, SdCardFont* font) { sdCardFonts_[fontId] = font; }
   void unregisterSdCardFont(int fontId) { removeFont(fontId); }
-  void clearSdCardFonts() { sdCardFonts_.clear(); }
+  void clearSdCardFonts() {
+    sdCardFonts_.clear();
+    uiMetadataFontId_ = 0;
+  }
   const std::map<int, SdCardFont*>& getSdCardFonts() const { return sdCardFonts_; }
   bool isSdCardFont(int fontId) const { return sdCardFonts_.count(fontId) > 0; }
+  // Select an SD-card font only for dynamic UI metadata containing CJK. Fixed
+  // interface labels keep their built-in font and existing layout.
+  void setUiMetadataFont(int fontId) { uiMetadataFontId_ = isSdCardFont(fontId) ? fontId : 0; }
+  int uiMetadataFontForText(int fallbackFontId, const char* text) const;
+  bool prewarmUiMetadata(const char* const* texts, size_t textCount, uint8_t styleMask = 0x03) const;
   // Ensure SD card font glyph data is loaded for the given text. Called from layout code
   // (which holds a const GfxRenderer&) before measuring word widths. Safe to call on non-SD fonts (no-op).
   // styleMask: bitmask of styles to prepare (bit 0=regular, 1=bold, 2=italic, 3=bold-italic).

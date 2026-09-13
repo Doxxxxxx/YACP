@@ -289,9 +289,10 @@ void LyraCarouselTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect,
 
   const int screenW = renderer.getScreenWidth();
   const int textMaxWidth = std::min(screenW - 40, kCenterCoverMaxW + 40);
+  const int titleFont = renderer.uiMetadataFontForText(kTitleFontId, recentBooks[centerIdx].title.c_str());
   const auto titleLines =
-      renderer.wrappedText(kTitleFontId, recentBooks[centerIdx].title.c_str(), textMaxWidth, 2, EpdFontFamily::BOLD);
-  const int titleLineHeight = renderer.getLineHeight(kTitleFontId);
+      renderer.wrappedText(titleFont, recentBooks[centerIdx].title.c_str(), textMaxWidth, 2, EpdFontFamily::BOLD);
+  const int titleLineHeight = renderer.getLineHeight(titleFont);
   const int titleBlockHeight = titleLineHeight * static_cast<int>(titleLines.size());
   const int reservedTitleBlockHeight = titleLineHeight * 2;
   const int titleY = rect.y + kTitleTopClearance;
@@ -366,15 +367,16 @@ void LyraCarouselTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect,
     const int fallbackTitleY = iconY + 32 + kFallbackIconGap;
     const int fallbackTitleW = outRect.width - kFallbackTitlePadX * 2;
     const int fallbackTitleH = outRect.y + outRect.height - kFallbackTitlePadBottom - fallbackTitleY;
-    const int fallbackLineHeight = renderer.getLineHeight(UI_10_FONT_ID);
+    const int fallbackTitleFont = renderer.uiMetadataFontForText(UI_10_FONT_ID, book.title.c_str());
+    const int fallbackLineHeight = renderer.getLineHeight(fallbackTitleFont);
     const int maxFallbackLines = std::clamp(fallbackTitleH / std::max(1, fallbackLineHeight), 1, 4);
-    const auto fallbackTitleLines =
-        renderer.wrappedText(UI_10_FONT_ID, book.title.c_str(), fallbackTitleW, maxFallbackLines, EpdFontFamily::BOLD);
+    const auto fallbackTitleLines = renderer.wrappedText(fallbackTitleFont, book.title.c_str(), fallbackTitleW,
+                                                         maxFallbackLines, EpdFontFamily::BOLD);
     const int fallbackBlockH = fallbackLineHeight * static_cast<int>(fallbackTitleLines.size());
     int fallbackLineY = fallbackTitleY + std::max(0, (fallbackTitleH - fallbackBlockH) / 2);
     for (const auto& line : fallbackTitleLines) {
-      const int lineW = renderer.getTextWidth(UI_10_FONT_ID, line.c_str(), EpdFontFamily::BOLD);
-      renderer.drawText(UI_10_FONT_ID, outRect.x + (outRect.width - lineW) / 2, fallbackLineY, line.c_str(), false,
+      const int lineW = renderer.getTextWidth(fallbackTitleFont, line.c_str(), EpdFontFamily::BOLD);
+      renderer.drawText(fallbackTitleFont, outRect.x + (outRect.width - lineW) / 2, fallbackLineY, line.c_str(), false,
                         EpdFontFamily::BOLD);
       fallbackLineY += fallbackLineHeight;
     }
@@ -439,8 +441,8 @@ void LyraCarouselTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect,
     const int titleVerticalInset = (reservedTitleBlockHeight - titleBlockHeight) / 2;
     int currentTitleY = titleY + titleVerticalInset + kTitleDrawOffset;
     for (const auto& titleLine : titleLines) {
-      const int titleW = renderer.getTextWidth(kTitleFontId, titleLine.c_str(), EpdFontFamily::BOLD);
-      renderer.drawText(kTitleFontId, textCenterX - titleW / 2, currentTitleY, titleLine.c_str(), true,
+      const int titleW = renderer.getTextWidth(titleFont, titleLine.c_str(), EpdFontFamily::BOLD);
+      renderer.drawText(titleFont, textCenterX - titleW / 2, currentTitleY, titleLine.c_str(), true,
                         EpdFontFamily::BOLD);
       currentTitleY += titleLineHeight;
     }
