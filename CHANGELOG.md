@@ -10,6 +10,15 @@
   behavior until it is changed. A Smart sync upload also returns to the book on its own after 1.2 seconds instead of
   waiting for a key press.
 
+### Fixed
+
+- Fixed KOReader sync (and every other outgoing TCP connection) failing with "server refused the connection" when
+  the reader is on a phone hotspot whose mobile network is IPv6-only (Orange/Sosh, Free Mobile, T-Mobile and others
+  using 464xlat). The phone translates the reader's IPv4 traffic into IPv6 and drops TCP segments that lack the IP
+  "Don't Fragment" flag, which lwIP never sets; UDP (DNS, NTP) was unaffected, so the symptom looked like a server
+  problem. The firmware now sets Don't Fragment on outgoing TCP segments of the WiFi station interface, exactly as
+  Windows, Linux and iOS do. Home WiFi networks are not affected either way.
+
 ## [v1.7.1-yacp] - 2026-09-20
 
 ### Added
