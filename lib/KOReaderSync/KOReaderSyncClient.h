@@ -72,4 +72,7 @@ class KOReaderSyncClient {
 
   /** Transport-layer error from the last request (for diagnostics). */
   static int lastTransportError;
+
+  /** esp-tls error (ESP_ERR_ESP_TLS_* / ESP_ERR_MBEDTLS_*) behind lastTransportError; 0 if none. */
+  static int lastTlsError;
 };

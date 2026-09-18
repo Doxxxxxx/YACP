@@ -8,6 +8,7 @@
 #include "KOReaderSyncClient.h"
 #include "ProgressMapper.h"
 #include "activities/Activity.h"
+#include "network/WifiPowerSaveGuard.h"
 
 /**
  * Activity for syncing reading progress with KOReader sync server.
@@ -58,6 +59,9 @@ class KOReaderSyncActivity final : public Activity {
   };
 
   std::shared_ptr<Epub> epub;  // null until lazy-loaded after TLS in performSync()
+  // Keeps WiFi modem sleep off from connection until the sync ends. Phone hotspots drop frames buffered
+  // for a dozing station, which lost DNS replies that took more than a few tens of milliseconds.
+  std::unique_ptr<WifiPowerSaveGuard> wifiPowerSaveGuard;
   std::string epubPath;
   std::string localChapterName;
   int currentSpineIndex;

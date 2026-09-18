@@ -24,6 +24,7 @@ void KOReaderAuthActivity::onWifiSelectionComplete(const bool success) {
     return;
   }
 
+  wifiPowerSaveGuard = std::make_unique<WifiPowerSaveGuard>();
   sdFontSystem.releaseForNetwork(renderer);
 
   {
@@ -70,6 +71,7 @@ void KOReaderAuthActivity::onEnter() {
 void KOReaderAuthActivity::onExit() {
   Activity::onExit();
 
+  wifiPowerSaveGuard.reset();
   if (WiFi.getMode() != WIFI_MODE_NULL) {
     WiFi.disconnect(false);
     delay(30);

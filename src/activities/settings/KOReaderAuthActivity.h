@@ -1,8 +1,10 @@
 #pragma once
 
 #include <functional>
+#include <memory>
 
 #include "activities/Activity.h"
+#include "network/WifiPowerSaveGuard.h"
 
 /**
  * Activity for testing KOReader credentials.
@@ -25,6 +27,7 @@ class KOReaderAuthActivity final : public Activity {
   State state = WIFI_SELECTION;
   std::string statusMessage;
   std::string errorMessage;
+  std::unique_ptr<WifiPowerSaveGuard> wifiPowerSaveGuard;  // see KOReaderSyncActivity
 
   void onWifiSelectionComplete(bool success);
   void performAuthentication();
