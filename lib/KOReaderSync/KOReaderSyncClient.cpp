@@ -14,6 +14,7 @@
 #include <esp_crt_bundle.h>
 #include <esp_err.h>
 #include <esp_http_client.h>
+#include <esp_tls_errors.h>
 #endif
 
 #include <cstdio>
@@ -25,6 +26,7 @@
 
 int KOReaderSyncClient::lastHttpCode = 0;
 int KOReaderSyncClient::lastTransportError = 0;
+int KOReaderSyncClient::lastTlsError = 0;
 
 namespace {
 constexpr char DEVICE_ID[] = "crossink-device";
@@ -52,6 +54,23 @@ std::string networkErrorMessage() {
   switch (KOReaderSyncClient::lastTransportError) {
     case ESP_ERR_HTTP_CONNECT:
     case ESP_ERR_HTTP_CONNECTING:
+      // esp_http_client folds DNS, TCP, timeout and TLS handshake failures into one code;
+      // the esp-tls error recorded by recordTransportFailure() tells them apart.
+      switch (KOReaderSyncClient::lastTlsError) {
+        case ESP_ERR_ESP_TLS_CANNOT_RESOLVE_HOSTNAME:
+          return tr(STR_KOREADER_SYNC_NETWORK_DNS);
+        case ESP_ERR_ESP_TLS_CONNECTION_TIMEOUT:
+        case ESP_ERR_ESP_TLS_SERVER_HANDSHAKE_TIMEOUT:
+          return tr(STR_KOREADER_SYNC_NETWORK_TIMEOUT);
+        case ESP_ERR_MBEDTLS_SSL_SETUP_FAILED:
+        case ESP_ERR_MBEDTLS_SSL_HANDSHAKE_FAILED:
+        case ESP_ERR_MBEDTLS_SSL_CONFIG_DEFAULTS_FAILED:
+        case ESP_ERR_MBEDTLS_SSL_SET_HOSTNAME_FAILED:
+        case ESP_ERR_MBEDTLS_X509_CRT_PARSE_FAILED:
+          return tr(STR_KOREADER_SYNC_NETWORK_TLS);
+        default:
+          return tr(STR_KOREADER_SYNC_NETWORK_REFUSED);
+      }
     case ESP_ERR_HTTP_CONNECTION_CLOSED:
       return tr(STR_KOREADER_SYNC_NETWORK_REFUSED);
     case ESP_ERR_HTTP_FETCH_HEADER:
@@ -210,12 +229,25 @@ esp_http_client_handle_t createClient(const char* url, ResponseBuffer* buf,
 
   return client;
 }
+
+// Record why esp_http_client_perform() failed. Must run before esp_http_client_cleanup(): the
+// esp-tls error handle lives in the transport. Logged at error level so release builds show it.
+void recordTransportFailure(esp_http_client_handle_t client, esp_err_t err, const char* context) {
+  int tlsCode = 0;
+  int tlsFlags = 0;
+  const esp_err_t tlsErr = esp_http_client_get_and_clear_last_tls_error(client, &tlsCode, &tlsFlags);
+  KOReaderSyncClient::lastTlsError = (tlsErr == ESP_FAIL) ? 0 : static_cast<int>(tlsErr);
+  LOG_ERR("KOSync", "%s failed: %s (0x%x) tls=%s (0x%x) mbedtls=%d flags=0x%x errno=%d", context,
+          esp_err_to_name(err), static_cast<unsigned>(err), esp_err_to_name(tlsErr), static_cast<unsigned>(tlsErr),
+          tlsCode, static_cast<unsigned>(tlsFlags), esp_http_client_get_errno(client));
+}
 #endif
 }  // namespace
 
 KOReaderSyncClient::Error KOReaderSyncClient::authenticate() {
   lastHttpCode = 0;
   lastTransportError = 0;
+  lastTlsError = 0;
   if (!KOREADER_STORE.hasCredentials()) {
     LOG_DBG("KOSync", "No credentials configured");
     return NO_CREDENTIALS;
@@ -274,6 +306,7 @@ KOReaderSyncClient::Error KOReaderSyncClient::authenticate() {
   const int httpCode = esp_http_client_get_status_code(client);
   lastHttpCode = httpCode;
   lastTransportError = static_cast<int>(err);
+  if (err != ESP_OK) recordTransportFailure(client, err, "Auth");
   logHeapStats("After auth perform");
   esp_http_client_cleanup(client);
 
@@ -290,6 +323,7 @@ KOReaderSyncClient::Error KOReaderSyncClient::getProgress(const std::string& doc
                                                           KOReaderProgress& outProgress) {
   lastHttpCode = 0;
   lastTransportError = 0;
+  lastTlsError = 0;
   if (!KOREADER_STORE.hasCredentials()) {
     LOG_DBG("KOSync", "No credentials configured");
     return NO_CREDENTIALS;
@@ -365,6 +399,7 @@ KOReaderSyncClient::Error KOReaderSyncClient::getProgress(const std::string& doc
   const int httpCode = esp_http_client_get_status_code(client);
   lastHttpCode = httpCode;
   lastTransportError = static_cast<int>(err);
+  if (err != ESP_OK) recordTransportFailure(client, err, "Get progress");
   logHeapStats("After get perform");
   esp_http_client_cleanup(client);
 
@@ -401,6 +436,7 @@ KOReaderSyncClient::Error KOReaderSyncClient::getProgress(const std::string& doc
 KOReaderSyncClient::Error KOReaderSyncClient::updateProgress(const KOReaderProgress& progress) {
   lastHttpCode = 0;
   lastTransportError = 0;
+  lastTlsError = 0;
   if (!KOREADER_STORE.hasCredentials()) {
     LOG_DBG("KOSync", "No credentials configured");
     return NO_CREDENTIALS;
@@ -476,6 +512,7 @@ KOReaderSyncClient::Error KOReaderSyncClient::updateProgress(const KOReaderProgr
   const int httpCode = esp_http_client_get_status_code(client);
   lastHttpCode = httpCode;
   lastTransportError = static_cast<int>(err);
+  if (err != ESP_OK) recordTransportFailure(client, err, "Update progress");
   logHeapStats("After put perform");
   esp_http_client_cleanup(client);
 

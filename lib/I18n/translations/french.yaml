@@ -617,6 +617,7 @@ STR_KOREADER_SYNC_BAD_RESPONSE: "Le serveur a renvoyé des données invalides. V
 STR_KOREADER_SYNC_HTTP_404: "Point de synchronisation introuvable. Vérifiez l’URL du serveur KOReader."
 STR_KOREADER_SYNC_HTTP_STATUS_FORMAT: "Le serveur a renvoyé HTTP %d. Réessayez plus tard."
 STR_KOREADER_SYNC_LOW_MEMORY: "Mémoire disponible insuffisante pour terminer la synchronisation. Réessayez."
+STR_KOREADER_SYNC_NETWORK_DNS: "Adresse du serveur introuvable (DNS). Vérifiez le réseau et l’URL du serveur."
 STR_KOREADER_SYNC_NETWORK_ERROR: "Serveur de synchronisation injoignable. Vérifiez le Wi-Fi et son URL."
 STR_KOREADER_SYNC_NETWORK_REFUSED: "Le serveur a refusé la connexion. Vérifiez son URL et sa disponibilité."
 STR_KOREADER_SYNC_NETWORK_TIMEOUT: "Délai du serveur dépassé. Vérifiez le signal Wi-Fi et réessayez."

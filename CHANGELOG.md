@@ -18,6 +18,18 @@
   "Don't Fragment" flag, which lwIP never sets; UDP (DNS, NTP) was unaffected, so the symptom looked like a server
   problem. The firmware now sets Don't Fragment on outgoing TCP segments of the WiFi station interface, exactly as
   Windows, Linux and iOS do. Home WiFi networks are not affected either way.
+- KOReader sync and the KOReader account check now keep the WiFi radio awake for their whole duration, as book
+  downloads and firmware updates already did. Phone hotspots drop frames buffered for a sleeping device, which
+  made DNS replies that took more than a few tens of milliseconds vanish and ended the sync with a "server address
+  not found" error. The radio still goes off as soon as the sync ends.
+
+### Changed
+
+- KOReader sync connection failures now report what actually failed. A name-resolution failure shows a dedicated DNS
+  message, a connect or handshake timeout shows the timeout message, and a TLS handshake failure shows the secure
+  connection message; only a real TCP-level refusal keeps the "server refused the connection" text. The serial log also
+  records the underlying esp-tls and mbedTLS error codes and the network parameters (IP, gateway, DNS servers, RSSI,
+  channel) at the start of every sync, so failures that only happen on one network can be diagnosed from the log.
 
 ## [v1.7.0-yacp.3] - 2026-09-13
 
