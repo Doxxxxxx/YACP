@@ -8,36 +8,59 @@
 #include <lwip/ip.h>
 #include <lwip/netif.h>
 #include <lwip/prot/ip4.h>
+#include <lwip/tcpip.h>
+
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
 
 namespace {
 netif_output_fn s_originalOutput = nullptr;
 
-// Runs in the lwIP tcpip task with p->payload pointing at the finished IPv4 header.
+// Runs in the lwIP tcpip task with p->payload pointing at the finished IPv4 header. Header fields are
+// read and written with memcpy: the payload pointer carries no alignment guarantee for wider types.
 err_t outputWithDontFragment(struct netif* netif, struct pbuf* p, const ip4_addr_t* ipaddr) {
   if (p->len >= IP_HLEN) {
-    auto* iphdr = static_cast<struct ip_hdr*>(p->payload);
-    const u16_t offset = lwip_ntohs(IPH_OFFSET(iphdr));
+    auto* hdr = static_cast<uint8_t*>(p->payload);
+    const uint8_t versionAndLength = hdr[offsetof(struct ip_hdr, _v_hl)];
+    const uint8_t protocol = hdr[offsetof(struct ip_hdr, _proto)];
+    const uint16_t headerLength = static_cast<uint16_t>((versionAndLength & 0x0f) * 4);
+    uint16_t offsetBe = 0;
+    memcpy(&offsetBe, hdr + offsetof(struct ip_hdr, _offset), sizeof(offsetBe));
+    const uint16_t offset = lwip_ntohs(offsetBe);
+
     // Whole TCP packets only: lwIP has already split anything larger than the MTU into fragments.
-    if (IPH_V(iphdr) == 4 && IPH_PROTO(iphdr) == IP_PROTO_TCP && (offset & (IP_MF | IP_OFFMASK)) == 0 &&
-        (offset & IP_DF) == 0) {
-      IPH_OFFSET_SET(iphdr, lwip_htons(offset | IP_DF));
-      IPH_CHKSUM_SET(iphdr, 0);
-      IPH_CHKSUM_SET(iphdr, inet_chksum(iphdr, IPH_HL_BYTES(iphdr)));
+    if ((versionAndLength >> 4) == 4 && protocol == IP_PROTO_TCP && headerLength >= IP_HLEN && p->len >= headerLength &&
+        (offset & (IP_MF | IP_OFFMASK)) == 0 && (offset & IP_DF) == 0) {
+      offsetBe = lwip_htons(static_cast<uint16_t>(offset | IP_DF));
+      memcpy(hdr + offsetof(struct ip_hdr, _offset), &offsetBe, sizeof(offsetBe));
+      uint16_t checksum = 0;
+      memcpy(hdr + offsetof(struct ip_hdr, _chksum), &checksum, sizeof(checksum));
+      checksum = inet_chksum(hdr, headerLength);  // already in network byte order
+      memcpy(hdr + offsetof(struct ip_hdr, _chksum), &checksum, sizeof(checksum));
     }
   }
   return s_originalOutput(netif, p, ipaddr);
+}
+
+// Runs in the lwIP tcpip task so the swap cannot race with an output in progress.
+void installHook(void* arg) {
+  auto* netif = static_cast<struct netif*>(arg);
+  if (!netif->output || netif->output == outputWithDontFragment) return;
+  s_originalOutput = netif->output;
+  netif->output = outputWithDontFragment;
+  LOG_INF("WIFI", "TCP Don't-Fragment enabled on STA netif");
 }
 }  // namespace
 
 void applyTcpDontFragment() {
   auto* netif = static_cast<struct netif*>(esp_netif_get_netif_impl(WiFi.STA.netif()));
-  if (!netif || !netif->output) {
+  if (!netif) {
     LOG_ERR("WIFI", "STA netif unavailable, TCP Don't-Fragment not applied");
     return;
   }
-  if (netif->output == outputWithDontFragment) return;
-  s_originalOutput = netif->output;
-  netif->output = outputWithDontFragment;
-  LOG_INF("WIFI", "TCP Don't-Fragment enabled on STA netif");
+  if (tcpip_callback(installHook, netif) != ERR_OK) {
+    LOG_ERR("WIFI", "tcpip_callback failed, TCP Don't-Fragment not applied");
+  }
 }
 #endif
