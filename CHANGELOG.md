@@ -1,3 +1,16 @@
+## [v1.7.0-yacp.4] - 2026-09-19
+
+This beta hotfix addresses custom reader font rendering and prepared dictionary compatibility reported during the
+YACP 1.7.0 beta test.
+
+### Fixed
+
+- EPUB pages now prewarm custom SD-card fonts correctly when their signed hashed identifier is negative, preventing
+  page text from appearing as replacement glyphs.
+- Dictionary word selection and definition screens now retain the SD-card font cache through the real draw.
+- Cambridge and other prepared StarDict dictionaries using XDXF metadata are now discovered under
+  `/.dictionaries/<folder>` instead of being reported as missing.
+
 ## [v1.7.0-yacp.3] - 2026-09-13
 
 This beta consolidates the work completed since the stable YACP 1.6.2 release. It includes the 1.6.3 hardware and

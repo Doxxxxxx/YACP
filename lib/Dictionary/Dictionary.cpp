@@ -175,9 +175,11 @@ bool Dictionary::parseIfo(const char* basePath, DefinitionFormat& format, Discov
       constexpr char SEQUENCE_PREFIX[] = "sametypesequence=";
       if (strncmp(scratch.line, SEQUENCE_PREFIX, sizeof(SEQUENCE_PREFIX) - 1) == 0) {
         const char* sequence = scratch.line + sizeof(SEQUENCE_PREFIX) - 1;
-        if (sequence[0] == 'h' && sequence[1] == '\0') {
+        if ((sequence[0] == 'h' || sequence[0] == 'g' || sequence[0] == 'x') && sequence[1] == '\0') {
           format = DefinitionFormat::Html;
-        } else if (sequence[0] == 'm' && sequence[1] == '\0') {
+        } else if ((sequence[0] == 'm' || sequence[0] == 'l' || sequence[0] == 't' || sequence[0] == 'y' ||
+                    sequence[0] == 'n') &&
+                   sequence[1] == '\0') {
           format = DefinitionFormat::Plain;
         } else {
           unsupportedTypes = true;

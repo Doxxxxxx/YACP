@@ -48,6 +48,8 @@ words with the directional controls, press Confirm to look up the highlighted
 word, and use Left or Right to change definition pages.
 
 Definitions are limited to 8 KB per lookup and displayed as plain text. Basic
-HTML tags and common entities are converted in place. Synonyms, lookup history,
-suggestions, compressed dictionaries, and background indexing are not part of
-this low-power first version.
+HTML and XDXF tags plus common entities are converted in place. Single-field
+StarDict sequences `m`, `l`, `t`, `y`, and `n` are treated as text, while `h`,
+`g`, and `x` are treated as markup. Synonyms, lookup history, suggestions,
+compressed dictionaries, and background indexing are not part of this
+low-power first version.

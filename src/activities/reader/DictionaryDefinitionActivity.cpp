@@ -343,15 +343,22 @@ void DictionaryDefinitionActivity::render(RenderLock&&) {
 
   const int bodyX = safe.x + metrics.contentSidePadding;
   const int bodyY = safe.y + metrics.topPadding + metrics.headerHeight + metrics.verticalSpacing;
+  const auto drawDefinition = [this, bodyX, bodyY]() {
+    drawBody(bodyX, bodyY);
+    const auto labels = mappedInput.mapLabels(tr(STR_BACK), "", currentPage_ > 0 ? "<" : "",
+                                               currentPage_ + 1 < totalPages_ ? ">" : "");
+    GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4, true);
+    renderer.displayBuffer();
+  };
+
   if (auto* cache = renderer.getFontCacheManager()) {
     auto scope = cache->createPrewarmScope();
     drawBody(bodyX, bodyY);
-    scope.endScanAndPrewarm();
+    if (!scope.endScanAndPrewarm()) {
+      LOG_ERR("DICT", "Failed to prewarm reader font for dictionary definition");
+    }
+    drawDefinition();
+    return;
   }
-  drawBody(bodyX, bodyY);
-
-  const auto labels =
-      mappedInput.mapLabels(tr(STR_BACK), "", currentPage_ > 0 ? "<" : "", currentPage_ + 1 < totalPages_ ? ">" : "");
-  GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4, true);
-  renderer.displayBuffer();
+  drawDefinition();
 }

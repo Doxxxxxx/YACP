@@ -309,11 +309,6 @@ void DictionaryWordSelectActivity::loop() {
 
 void DictionaryWordSelectActivity::drawPage() const {
   renderer.clearScreen(ReaderUtils::readerBackgroundColor());
-  if (auto* cache = renderer.getFontCacheManager()) {
-    auto scope = cache->createPrewarmScope();
-    page_->renderText(renderer, fontId_, marginLeft_, marginTop_, ReaderUtils::readerForegroundBlack());
-    scope.endScanAndPrewarm();
-  }
   page_->render(renderer, fontId_, marginLeft_, marginTop_, ReaderUtils::readerForegroundBlack());
 }
 
@@ -364,10 +359,16 @@ void DictionaryWordSelectActivity::render(RenderLock&&) {
   if (popup_ == Popup::None && snapshotIndex_ >= 0 && wordCount_ > 0 && selected_ != snapshotIndex_) {
     if (renderer.copyBufferToRegion(snapshotX_, snapshotY_, snapshotW_, snapshotH_, snapshot_.get(),
                                     SNAPSHOT_CAPACITY)) {
-      renderer.ensureSdCardFontReady(
-          fontId_, words_[selected_].text,
-          static_cast<uint8_t>(1u << (static_cast<uint8_t>(words_[selected_].style) & 0x03)));
-      if (saveAndDrawHighlight()) {
+      if (auto* cache = renderer.getFontCacheManager()) {
+        auto scope = cache->createPrewarmScope();
+        renderer.drawText(fontId_, words_[selected_].x, words_[selected_].y, words_[selected_].text, true,
+                          words_[selected_].style);
+        if (scope.endScanAndPrewarm() && saveAndDrawHighlight()) {
+          drawHints();
+          renderer.displayBuffer(HalDisplay::FAST_REFRESH);
+          return;
+        }
+      } else if (saveAndDrawHighlight()) {
         drawHints();
         renderer.displayBuffer(HalDisplay::FAST_REFRESH);
         return;
@@ -375,18 +376,31 @@ void DictionaryWordSelectActivity::render(RenderLock&&) {
     }
   }
 
-  drawPage();
-  if (wordCount_ > 0) saveAndDrawHighlight();
-  drawHints();
+  const auto drawCompleteScreen = [this]() {
+    drawPage();
+    if (wordCount_ > 0) saveAndDrawHighlight();
+    drawHints();
 
-  if (popup_ != Popup::None) {
-    snapshotIndex_ = -1;
-    StrId message = StrId::STR_LOADING_POPUP;
-    if (popup_ == Popup::NotFound) message = StrId::STR_DICT_NOT_FOUND;
-    if (popup_ == Popup::Unavailable) message = StrId::STR_NO_FILES_FOUND;
-    if (popup_ == Popup::Error) message = StrId::STR_DICT_ERROR;
-    GUI.drawPopup(renderer, I18N.get(message));
+    if (popup_ != Popup::None) {
+      snapshotIndex_ = -1;
+      StrId message = StrId::STR_LOADING_POPUP;
+      if (popup_ == Popup::NotFound) message = StrId::STR_DICT_NOT_FOUND;
+      if (popup_ == Popup::Unavailable) message = StrId::STR_NO_FILES_FOUND;
+      if (popup_ == Popup::Error) message = StrId::STR_DICT_ERROR;
+      GUI.drawPopup(renderer, I18N.get(message));
+      return;
+    }
+    renderer.displayBuffer(HalDisplay::FAST_REFRESH);
+  };
+
+  if (auto* cache = renderer.getFontCacheManager()) {
+    auto scope = cache->createPrewarmScope();
+    page_->renderText(renderer, fontId_, marginLeft_, marginTop_, ReaderUtils::readerForegroundBlack());
+    if (!scope.endScanAndPrewarm()) {
+      LOG_ERR("DICT", "Failed to prewarm reader font for word selection");
+    }
+    drawCompleteScreen();
     return;
   }
-  renderer.displayBuffer(HalDisplay::FAST_REFRESH);
+  drawCompleteScreen();
 }

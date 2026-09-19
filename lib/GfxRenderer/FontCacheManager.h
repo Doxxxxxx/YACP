@@ -53,5 +53,7 @@ class FontCacheManager {
   ScanMode scanMode_ = ScanMode::None;
   std::string scanText_;
   uint32_t scanStyleCounts_[4] = {};
-  int scanFontId_ = -1;
+  // Font ID zero is reserved by the renderer and is therefore a safe unset
+  // value even when SD-card font hashes are negative.
+  int scanFontId_ = 0;
 };

@@ -66,7 +66,11 @@ bool FontCacheManager::isScanning() const { return scanMode_ == ScanMode::Scanni
 
 void FontCacheManager::recordText(const char* text, int fontId, EpdFontFamily::Style style) {
   scanText_ += text;
-  if (scanFontId_ < 0) scanFontId_ = fontId;
+  // SD-card font IDs are signed FNV hashes and can legitimately be negative.
+  // Zero is the renderer's reserved "not found" ID, so use it as the unset
+  // sentinel instead of treating every negative ID as unset. Otherwise later
+  // status-bar text can replace the page's SD font ID before prewarming.
+  if (scanFontId_ == 0) scanFontId_ = fontId;
   const uint8_t baseStyle = static_cast<uint8_t>(style) & 0x03;
   const unsigned char* p = reinterpret_cast<const unsigned char*>(text);
   uint32_t cpCount = 0;
@@ -86,7 +90,7 @@ FontCacheManager::PrewarmScope::PrewarmScope(FontCacheManager& manager) : manage
   manager_->scanText_.clear();
   manager_->scanText_.reserve(2048);  // Pre-allocate to avoid heap fragmentation from repeated concat
   memset(manager_->scanStyleCounts_, 0, sizeof(manager_->scanStyleCounts_));
-  manager_->scanFontId_ = -1;
+  manager_->scanFontId_ = 0;
 }
 
 bool FontCacheManager::PrewarmScope::endScanAndPrewarm() {
@@ -100,6 +104,9 @@ bool FontCacheManager::PrewarmScope::endScanAndPrewarm() {
   }
   if (styleMask == 0) styleMask = 1;  // default to regular
 
+  if (manager_->sdCardFonts_.count(manager_->scanFontId_) != 0) {
+    LOG_DBG("FCM", "Prewarming scanned SD-card font %d", manager_->scanFontId_);
+  }
   const bool ok = manager_->prewarmCache(manager_->scanFontId_, manager_->scanText_.c_str(), styleMask);
 
   // Keep the grown capacity around so the next page can reuse it without
