@@ -15,12 +15,12 @@ This beta hotfix addresses feedback from the YACP 1.7.0 dictionary test.
 <table>
   <tr>
     <td align="center">
-      <img src="https://github.com/Sichroteph/YACP/releases/download/v1.7.0-yacp.4/paragraph-justify.png"
+      <img src="https://raw.githubusercontent.com/Sichroteph/YACP/release/1.7.0-yacp.4/docs/images/yacp/media/paragraph-justify.png"
            alt="EPUB paragraph alignment with Justify enabled on the X3 simulator"
            width="264">
     </td>
     <td align="center">
-      <img src="https://github.com/Sichroteph/YACP/releases/download/v1.7.0-yacp.4/reading-rhythm.png"
+      <img src="https://raw.githubusercontent.com/Sichroteph/YACP/release/1.7.0-yacp.4/docs/images/yacp/media/reading-rhythm.png"
            alt="Reading Rhythm with compact daily durations on the X3 simulator"
            width="264">
     </td>
