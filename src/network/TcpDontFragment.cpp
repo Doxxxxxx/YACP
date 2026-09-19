@@ -43,10 +43,17 @@ err_t outputWithDontFragment(struct netif* netif, struct pbuf* p, const ip4_addr
   return s_originalOutput(netif, p, ipaddr);
 }
 
-// Runs in the lwIP tcpip task so the swap cannot race with an output in progress.
-void installHook(void* arg) {
-  auto* netif = static_cast<struct netif*>(arg);
-  if (!netif->output || netif->output == outputWithDontFragment) return;
+// Runs in the lwIP tcpip task, which is also where esp_netif adds and removes the station netif: the
+// swap cannot race an output in progress, and resolving the netif here (not in the caller) means a
+// station torn down between the request and this call is simply not found rather than dereferenced.
+void installHook(void* /*unused*/) {
+  esp_netif_t* espNetif = WiFi.STA.netif();
+  auto* netif = espNetif ? static_cast<struct netif*>(esp_netif_get_netif_impl(espNetif)) : nullptr;
+  if (!netif || !netif->output) {
+    LOG_ERR("WIFI", "STA netif unavailable, TCP Don't-Fragment not applied");
+    return;
+  }
+  if (netif->output == outputWithDontFragment) return;
   s_originalOutput = netif->output;
   netif->output = outputWithDontFragment;
   LOG_INF("WIFI", "TCP Don't-Fragment enabled on STA netif");
@@ -54,12 +61,7 @@ void installHook(void* arg) {
 }  // namespace
 
 void applyTcpDontFragment() {
-  auto* netif = static_cast<struct netif*>(esp_netif_get_netif_impl(WiFi.STA.netif()));
-  if (!netif) {
-    LOG_ERR("WIFI", "STA netif unavailable, TCP Don't-Fragment not applied");
-    return;
-  }
-  if (tcpip_callback(installHook, netif) != ERR_OK) {
+  if (tcpip_callback(installHook, nullptr) != ERR_OK) {
     LOG_ERR("WIFI", "tcpip_callback failed, TCP Don't-Fragment not applied");
   }
 }
