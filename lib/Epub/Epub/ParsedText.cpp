@@ -187,7 +187,7 @@ std::vector<size_t> cjkCharacterBreakByteOffsets(const std::string& text) {
 int computeJustifyExtra(const int spareSpace, const size_t gapCount, const int maxExtraPerGap) {
   if (gapCount < MIN_JUSTIFY_GAPS || spareSpace <= 0 || maxExtraPerGap <= 0) return 0;
   const int extraPerGap = spareSpace / static_cast<int>(gapCount);
-  return extraPerGap <= maxExtraPerGap ? extraPerGap : 0;
+  return std::min(extraPerGap, maxExtraPerGap);
 }
 
 bool isBase64LikeChar(const char c) {
@@ -1188,8 +1188,8 @@ bool ParsedText::extractLine(Arena& scratchArena, const size_t breakIndex, const
           ? CssTextAlign::Right
           : blockStyle.alignment;
 
-  // Do not stretch a gap by more than one natural space. Lines that would need
-  // wider gaps keep their natural spacing instead of producing visible rivers.
+  // Do not stretch a gap by more than one natural space. Clamp excessive
+  // spacing instead of disabling justification for the whole line.
   const int spareSpace = effectivePageWidth - lineWordWidthSum - totalNaturalGaps;
   const int maxJustifyExtra = renderer.getTextAdvanceX(fontId, " ", EpdFontFamily::REGULAR);
   const int justifyExtra = (effectiveAlignment == CssTextAlign::Justify && !isLastLine)

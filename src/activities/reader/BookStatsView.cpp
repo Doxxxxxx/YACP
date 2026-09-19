@@ -168,6 +168,19 @@ void formatRhythmMinutes(const uint16_t minutes, char* buf, const size_t len) {
   }
 }
 
+void formatRecentDayMinutes(const uint16_t minutes, char* buf, const size_t len) {
+  if (!buf || len == 0) {
+    return;
+  }
+  if (minutes < 60) {
+    snprintf(buf, len, "%um", static_cast<unsigned>(minutes));
+    return;
+  }
+
+  snprintf(buf, len, "%u:%02u", static_cast<unsigned>(minutes / 60u),
+           static_cast<unsigned>(minutes % 60u));
+}
+
 int sectionCardHeight(const StatsLayout& layout, const int rowCount) {
   if (rowCount <= 0) {
     return layout.sectionTitleH + layout.chartTopPadding + layout.chartBottomPadding;
@@ -896,7 +909,8 @@ void renderReadingRhythmPage(GfxRenderer& renderer, const MappedInputManager* ma
 
   const int recentDaysY = gridTop + rowStride * 7;
   renderer.drawLine(cardX, recentDaysY, cardX + cardW, recentDaysY);
-  const int recentDayW = std::max(1, (cardW - cardPadding * 2) / kRecentReadingDayCount);
+  const int recentDaysAreaW = cardW - cardPadding * 2;
+  const int recentDaysAreaH = recentDaysH + cardPadding;
   const int recentDayLabelY = recentDaysY + 5;
   const int recentDayValueY = recentDayLabelY + renderer.getLineHeight(SMALL_FONT_ID) + 2;
   const uint32_t firstRecentDay = displayDay >= kRecentReadingDayCount - 1
@@ -904,23 +918,26 @@ void renderReadingRhythmPage(GfxRenderer& renderer, const MappedInputManager* ma
                                       : 0;
   for (int day = 0; day < kRecentReadingDayCount; ++day) {
     const uint32_t dayIndex = firstRecentDay + static_cast<uint32_t>(day);
-    const int columnX = cardX + cardPadding + day * recentDayW;
+    const int columnX = cardX + cardPadding + day * recentDaysAreaW / kRecentReadingDayCount;
+    const int columnRight = cardX + cardPadding + (day + 1) * recentDaysAreaW / kRecentReadingDayCount;
+    const int columnW = std::max(1, columnRight - columnX);
     ReadingStatsDate date;
     if (!readingStatsDateFromDayIndex(dayIndex, date)) {
       continue;
     }
 
     if (hasToday && dayIndex == displayDay) {
-      renderer.drawRoundedRect(columnX + 2, recentDaysY + 3, recentDayW - 4, recentDaysH - 6, 1, 4, true);
+      renderer.drawRoundedRect(columnX + 2, recentDaysY + 3, std::max(1, columnW - 4), recentDaysAreaH - 6, 1, 4,
+                               true);
     }
 
     const uint8_t dayOfWeek = readingStatsDayOfWeekIndex(date);
-    drawCenteredLabel(renderer, SMALL_FONT_ID, columnX, recentDayW, recentDayLabelY,
+    drawCenteredLabel(renderer, SMALL_FONT_ID, columnX, columnW, recentDayLabelY,
                       I18N.get(DAY_LABELS[dayOfWeek]));
 
     char duration[16];
-    formatRhythmMinutes(dailyHistory.minutesOnDay(dayIndex), duration, sizeof(duration));
-    drawCenteredLabel(renderer, SMALL_FONT_ID, columnX, recentDayW, recentDayValueY, duration);
+    formatRecentDayMinutes(dailyHistory.minutesOnDay(dayIndex), duration, sizeof(duration));
+    drawCenteredLabel(renderer, SMALL_FONT_ID, columnX, columnW, recentDayValueY, duration);
   }
 
   std::array<uint16_t, kReadingRhythmWeekCount> weeklyMinutes{};

@@ -171,7 +171,7 @@ sequence. The same video adjustments are applied to both clips to make faint gho
 
 ### Rendering and storage
 
-- Text antialiasing is off by default, avoiding the grayscale text pass while keeping image rendering enabled.
+- Text antialiasing is enabled by default for fresh settings; existing saved preferences are preserved.
 - Lexend Deca and Bitter are the normal built-in fonts.
 - SD-card fonts remain available, but discovery, catalogue allocation, and file access begin only after explicit
   selection or font management. Temporary load failures use a built-in fallback without erasing the saved choice.
