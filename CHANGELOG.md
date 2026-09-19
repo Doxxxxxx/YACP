@@ -12,6 +12,12 @@
 
 ### Fixed
 
+- Fixed the Justified paragraph alignment rendering like Left. Since 1.7.0-yacp.3 a justified line was only
+  stretched when the extra space per gap stayed under one natural space, otherwise it kept its natural spacing. At
+  reader font sizes a line holds only a handful of gaps, so most full lines exceeded that budget and stayed ragged.
+  Justified lines now again spread all remaining space across their gaps and reach the right margin; Left, Right and
+  Center are unchanged. A book that was already indexed with Justified keeps its cached layout until it is
+  re-indexed: change any layout setting (alignment, font, size, margin) once and switch it back.
 - Fixed KOReader sync (and every other outgoing TCP connection) failing with "server refused the connection" when
   the reader is on a phone hotspot whose mobile network is IPv6-only (Orange/Sosh, Free Mobile, T-Mobile and others
   using 464xlat). The phone translates the reader's IPv4 traffic into IPv6 and drops TCP segments that lack the IP
