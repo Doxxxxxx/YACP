@@ -3,8 +3,9 @@
 YACP has no community governance process. It is a personal firmware repository maintained for one owner's devices and
 preferences.
 
-The repository is public for inspection and forking. Public source does not imply a request for collaboration,
-maintenance help, testing, support, or feedback.
+The repository is public for inspection and forking. Reproducible bug reports, hardware feedback, and focused technical
+discussion are accepted through GitHub Issues, but public source does not imply a commitment to provide support or
+implement requested changes.
 
 ## Decision process
 
@@ -20,7 +21,7 @@ CrossPoint and CrossInk changes are reviewed selectively. Upstream parity is not
 
 ## External participation
 
-GitHub Issues and Discussions are disabled. Pull requests are closed automatically. There is no public or private
-support channel and no project contact route.
+GitHub Issues are open for reproducible bug reports, hardware feedback, and focused technical discussion. Discussions
+remain disabled, and pull requests are closed automatically. Issues are not a guaranteed support channel.
 
 Anyone may fork the code under its license and maintain a separate version.
