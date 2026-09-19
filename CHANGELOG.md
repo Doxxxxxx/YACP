@@ -25,6 +25,7 @@ reported issues and confirmed the fixes on their devices.
   can choose the earlier tonal mapping. Existing saved choices keep their behavior.
 - The YACP profile applies reinforcement on every page only to X3. X4 uses the normal 30-page cleanup interval, and
   the legacy profile that caused a strong refresh on every X4 page is corrected.
+- GitHub Issues are open for reproducible bug reports, hardware feedback, and focused technical discussion.
 
 ### Fixed
 
