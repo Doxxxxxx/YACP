@@ -5,11 +5,36 @@ YACP 1.7.0 beta test.
 
 ### Fixed
 
+- Re-selecting Justify after another paragraph alignment now keeps visible capped spacing instead of falling back to
+  left-aligned spacing on lines whose full justification would create oversized gaps.
+- Reading Rhythm now uses compact daily durations, distributes all available width across the seven recent days, and
+  keeps the current-day frame clear of its label and duration.
 - EPUB pages now prewarm custom SD-card fonts correctly when their signed hashed identifier is negative, preventing
   page text from appearing as replacement glyphs.
 - Dictionary word selection and definition screens now retain the SD-card font cache through the real draw.
 - Cambridge and other prepared StarDict dictionaries using XDXF metadata are now discovered under
   `/.dictionaries/<folder>` instead of being reported as missing.
+
+The corrected simulator views are shown below in the same preview format used by earlier releases.
+
+<table>
+  <tr>
+    <td align="center">
+      <img src="docs/images/yacp/media/paragraph-justify.png"
+           alt="EPUB paragraph alignment with Justify enabled on the X3 simulator"
+           width="264">
+    </td>
+    <td align="center">
+      <img src="docs/images/yacp/media/reading-rhythm.png"
+           alt="Reading Rhythm with compact daily durations on the X3 simulator"
+           width="264">
+    </td>
+  </tr>
+  <tr>
+    <td align="center">Justify rendering</td>
+    <td align="center">Reading Rhythm</td>
+  </tr>
+</table>
 
 ## [v1.7.0-yacp.3] - 2026-09-13
 
