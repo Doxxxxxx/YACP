@@ -1,3 +1,21 @@
+## [v1.7.1-yacp] - 2026-09-20
+
+### Added
+
+- Dictionary lookup can now be assigned to a short or long Power press, a long
+  Confirm press, or a long Back press while reading an EPUB. Existing button
+  assignments are preserved.
+
+### Fixed
+
+- Reading statistics and book completion screens now show a single Home hint.
+- The Total Reading Time label stays inside its card on the book completion screen.
+
+### Changed
+
+- The dictionary setup guide now explains installation after a firmware upgrade
+  and how to resolve "No files found".
+
 ## [v1.7.0-yacp] - 2026-09-19
 
 This stable release brings together all changes since YACP 1.6.2 for X3 and X4. Thank you to the beta testers who

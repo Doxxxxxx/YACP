@@ -332,10 +332,20 @@ void drawStatCell(const GfxRenderer& renderer, const int x, const int w, const i
                   const char* label) {
   constexpr int kTextSidePadding = 8;
   const int maxTextWidth = std::max(1, w - kTextSidePadding * 2);
-  const int valueFontId = renderer.getTextWidth(LEXENDDECA_16_FONT_ID, value, EpdFontFamily::BOLD) <= maxTextWidth
+  int valueFontId = renderer.getTextWidth(LEXENDDECA_16_FONT_ID, value, EpdFontFamily::BOLD) <= maxTextWidth
                               ? LEXENDDECA_16_FONT_ID
                               : UI_12_FONT_ID;
-  const int labelFontId = renderer.getTextWidth(UI_10_FONT_ID, label) <= maxTextWidth ? UI_10_FONT_ID : SMALL_FONT_ID;
+  int labelFontId = renderer.getTextWidth(UI_10_FONT_ID, label) <= maxTextWidth ? UI_10_FONT_ID : SMALL_FONT_ID;
+  // Short cards also need room for both lines and their descenders, not just
+  // enough width for the value. In particular, the achievement footer is short.
+  constexpr int kTextVerticalPadding = 8;
+  const int maxTextHeight = h - kTextVerticalPadding * 2;
+  if (renderer.getLineHeight(valueFontId) + 4 + renderer.getLineHeight(labelFontId) > maxTextHeight) {
+    valueFontId = UI_12_FONT_ID;
+  }
+  if (renderer.getLineHeight(valueFontId) + 4 + renderer.getLineHeight(labelFontId) > maxTextHeight) {
+    labelFontId = SMALL_FONT_ID;
+  }
   const int valueLineH = renderer.getLineHeight(valueFontId);
   const int labelLineH = renderer.getLineHeight(labelFontId);
   const int totalTextH = valueLineH + 4 + labelLineH;
@@ -773,7 +783,7 @@ void renderGlobalStatsPage(GfxRenderer& renderer, const MappedInputManager* mapp
 
   if (showButtonHints && mappedInput) {
     const auto labels =
-        mappedInput->mapLabels(tr(STR_HOME), tr(STR_HOME), tr(STR_BACK), showMoreButton ? tr(STR_MORE) : "");
+        mappedInput->mapLabels(tr(STR_HOME), "", tr(STR_BACK), showMoreButton ? tr(STR_MORE) : "");
     GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4, true);
   }
 }
@@ -803,7 +813,7 @@ void renderCombinedStatsPage(GfxRenderer& renderer, const MappedInputManager* ma
                               layout);
 
   if (showButtonHints && mappedInput) {
-    const auto labels = mappedInput->mapLabels(tr(STR_HOME), showEditButton ? tr(STR_EDIT) : tr(STR_HOME), "",
+    const auto labels = mappedInput->mapLabels(tr(STR_HOME), showEditButton ? tr(STR_EDIT) : "", "",
                                                showMoreButton ? tr(STR_MORE) : "");
     GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4, true);
   }
@@ -1114,7 +1124,7 @@ void renderReadingRhythmPage(GfxRenderer& renderer, const MappedInputManager* ma
 
   if (showButtonHints && mappedInput) {
     const auto labels =
-        mappedInput->mapLabels(tr(STR_HOME), tr(STR_HOME), tr(STR_BACK), showMoreButton ? tr(STR_MORE) : "");
+        mappedInput->mapLabels(tr(STR_HOME), "", tr(STR_BACK), showMoreButton ? tr(STR_MORE) : "");
     GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4, true);
   }
 }
@@ -1207,7 +1217,7 @@ void renderFinishedBooksPage(GfxRenderer& renderer, const MappedInputManager* ma
   if (showButtonHints && mappedInput) {
     const char* previousLabel = showPreviousPage ? tr(STR_PREVIOUS_SHORT) : tr(STR_BACK);
     const char* nextLabel = showNextPage ? tr(STR_NEXT_SHORT) : (showMoreButton ? tr(STR_MORE) : "");
-    const auto labels = mappedInput->mapLabels(tr(STR_HOME), tr(STR_HOME), previousLabel, nextLabel);
+    const auto labels = mappedInput->mapLabels(tr(STR_HOME), "", previousLabel, nextLabel);
     GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4, true);
   }
 }
@@ -1253,7 +1263,7 @@ void renderNoRtcCombinedStatsPage(GfxRenderer& renderer, const MappedInputManage
   }
 
   if (showButtonHints && mappedInput) {
-    const auto labels = mappedInput->mapLabels(tr(STR_HOME), tr(STR_HOME), "", tr(STR_MORE));
+    const auto labels = mappedInput->mapLabels(tr(STR_HOME), "", "", tr(STR_MORE));
     GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4, true);
   }
 }
@@ -1433,7 +1443,7 @@ void renderReadingAchievementPage(GfxRenderer& renderer, const MappedInputManage
   }
 
   if (showButtonHints && mappedInput) {
-    const auto labels = mappedInput->mapLabels(tr(STR_HOME), tr(STR_HOME), "", tr(STR_HOME));
+    const auto labels = mappedInput->mapLabels(tr(STR_HOME), "", "", "");
     GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4, true);
   }
 }

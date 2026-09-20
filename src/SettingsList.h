@@ -409,7 +409,8 @@ inline std::vector<SettingInfo> getSettingsList(const SdCardFontRegistry* regist
                            StrId::STR_READER_DARK_MODE,
                            StrId::STR_FOOTNOTES,
                            StrId::STR_BROWSE_FILES,
-                           StrId::STR_SAVE_CLIPPING},
+                           StrId::STR_SAVE_CLIPPING,
+                           StrId::STR_DICTIONARY},
                           "shortPwrBtn", StrId::STR_CAT_CONTROLS)
             .withEnumRawValues({CrossPointSettings::IGNORE,
                                 CrossPointSettings::SLEEP,
@@ -432,7 +433,8 @@ inline std::vector<SettingInfo> getSettingsList(const SdCardFontRegistry* regist
                                 CrossPointSettings::TOGGLE_DARK_MODE,
                                 CrossPointSettings::FOOTNOTES,
                                 CrossPointSettings::FILE_BROWSER,
-                                CrossPointSettings::CREATE_CLIPPING}));
+                                CrossPointSettings::CREATE_CLIPPING,
+                                CrossPointSettings::DICTIONARY}));
     add(SettingInfo::Enum(StrId::STR_LONG_PRESS_ACTION, &CrossPointSettings::longPwrBtn,
                           {StrId::STR_IGNORE,
                            StrId::STR_SLEEP,
@@ -455,7 +457,8 @@ inline std::vector<SettingInfo> getSettingsList(const SdCardFontRegistry* regist
                            StrId::STR_READER_DARK_MODE,
                            StrId::STR_FOOTNOTES,
                            StrId::STR_BROWSE_FILES,
-                           StrId::STR_SAVE_CLIPPING},
+                           StrId::STR_SAVE_CLIPPING,
+                           StrId::STR_DICTIONARY},
                           "longPwrBtn", StrId::STR_CAT_CONTROLS)
             .withEnumRawValues({CrossPointSettings::IGNORE,
                                 CrossPointSettings::SLEEP,
@@ -478,7 +481,8 @@ inline std::vector<SettingInfo> getSettingsList(const SdCardFontRegistry* regist
                                 CrossPointSettings::TOGGLE_DARK_MODE,
                                 CrossPointSettings::FOOTNOTES,
                                 CrossPointSettings::FILE_BROWSER,
-                                CrossPointSettings::CREATE_CLIPPING}));
+                                CrossPointSettings::CREATE_CLIPPING,
+                                CrossPointSettings::DICTIONARY}));
     add(SettingInfo::Enum(StrId::STR_LONG_PRESS_MENU_ACTION, &CrossPointSettings::longPressMenuAction,
                           {StrId::STR_IGNORE,
                            StrId::STR_SLEEP,
@@ -500,7 +504,8 @@ inline std::vector<SettingInfo> getSettingsList(const SdCardFontRegistry* regist
                            StrId::STR_READER_DARK_MODE,
                            StrId::STR_FOOTNOTES,
                            StrId::STR_BROWSE_FILES,
-                           StrId::STR_SAVE_CLIPPING},
+                           StrId::STR_SAVE_CLIPPING,
+                           StrId::STR_DICTIONARY},
                           "longPressMenuAction", StrId::STR_CAT_CONTROLS)
             .withEnumRawValues({CrossPointSettings::LONG_MENU_OFF,
                                 CrossPointSettings::LONG_MENU_SLEEP,
@@ -522,7 +527,8 @@ inline std::vector<SettingInfo> getSettingsList(const SdCardFontRegistry* regist
                                 CrossPointSettings::LONG_MENU_TOGGLE_DARK_MODE,
                                 CrossPointSettings::LONG_MENU_FOOTNOTES,
                                 CrossPointSettings::LONG_MENU_FILE_BROWSER,
-                                CrossPointSettings::LONG_MENU_CREATE_CLIPPING}));
+                                CrossPointSettings::LONG_MENU_CREATE_CLIPPING,
+                                CrossPointSettings::LONG_MENU_DICTIONARY}));
     add(SettingInfo::Enum(StrId::STR_LONG_PRESS_BACK_ACTION, &CrossPointSettings::longPressBackAction,
                           {StrId::STR_IGNORE,
                            StrId::STR_SLEEP,
@@ -544,7 +550,8 @@ inline std::vector<SettingInfo> getSettingsList(const SdCardFontRegistry* regist
                            StrId::STR_READER_DARK_MODE,
                            StrId::STR_FOOTNOTES,
                            StrId::STR_BROWSE_FILES,
-                           StrId::STR_SAVE_CLIPPING},
+                           StrId::STR_SAVE_CLIPPING,
+                           StrId::STR_DICTIONARY},
                           "longPressBackAction", StrId::STR_CAT_CONTROLS)
             .withEnumRawValues({CrossPointSettings::LONG_MENU_OFF,
                                 CrossPointSettings::LONG_MENU_SLEEP,
@@ -566,7 +573,8 @@ inline std::vector<SettingInfo> getSettingsList(const SdCardFontRegistry* regist
                                 CrossPointSettings::LONG_MENU_TOGGLE_DARK_MODE,
                                 CrossPointSettings::LONG_MENU_FOOTNOTES,
                                 CrossPointSettings::LONG_MENU_FILE_BROWSER,
-                                CrossPointSettings::LONG_MENU_CREATE_CLIPPING}));
+                                CrossPointSettings::LONG_MENU_CREATE_CLIPPING,
+                                CrossPointSettings::LONG_MENU_DICTIONARY}));
     add(SettingInfo::Toggle(StrId::STR_PWR_BTN_FOOTNOTE_BACK, &CrossPointSettings::pwrBtnFootnoteBack,
                             "pwrBtnFootnoteBack", StrId::STR_CAT_CONTROLS));
 
