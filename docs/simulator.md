@@ -107,6 +107,36 @@ Keyboard controls:
 | P | Power |
 | S | Simulated sleep |
 
+## Autonomous regression suite
+
+The complete simulator QA procedure is in `scripts/run_simulator_regression.py`.
+It builds `simulator_x3`, creates an isolated `fs_` directory for every case,
+launches the program without user input, validates log markers, and checks the
+BMP captures. The suite covers reader navigation and sleep entry, the EPUB
+line-break and layout fixtures, Dictionary lookup, Reading Achievement,
+Reading Rhythm, Finished Books, Autonomy, and CJK metadata with the
+Microsoft YaHei SD font.
+
+Run the full suite from the YACP directory:
+
+```sh
+python3 scripts/run_simulator_regression.py
+```
+
+On Windows, the same command automatically stages the source in WSL because
+the native Windows environment does not provide the SDL2 build toolchain. A
+timestamped report, logs, and captures are written under
+`qa-artifacts/simulator-regression/`.
+
+Run one procedure while iterating on a change:
+
+```sh
+python3 scripts/run_simulator_regression.py --scenario dictionary-lookup
+```
+
+Use `--no-build` only when the requested simulator binary already exists. Use
+`--window` when a visible SDL session is needed for a manual visual check.
+
 ## Automated navigation and screenshots
 
 The simulator accepts timed inputs and BMP capture paths:

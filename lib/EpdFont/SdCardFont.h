@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -152,15 +153,16 @@ class SdCardFont {
     uint32_t bitmapFileOffset = 0;
 
     // Full intervals loaded from file (kept in RAM for codepoint lookup)
-    EpdUnicodeInterval* fullIntervals = nullptr;
+    std::unique_ptr<EpdUnicodeInterval[]> fullIntervals;
     struct BmpInterval16 {
       uint16_t first;
       uint16_t last;
       uint16_t offset;
     } __attribute__((packed));
     static_assert(sizeof(BmpInterval16) == 6, "BmpInterval16 must remain compact");
-    BmpInterval16* bmpIntervals = nullptr;
-    bool intervalsAreBmp16 = false;
+    std::unique_ptr<BmpInterval16[]> bmpIntervals;
+    // Sorted BMP prefix followed by full-width intervals, including a range crossing U+FFFF.
+    uint32_t bmpIntervalCount = 0;
 
     // Persistent kern-class + ligature tables (lazy-loaded on first prewarm).
     // The full kern MATRIX is NOT resident — on Literata-class fonts a single

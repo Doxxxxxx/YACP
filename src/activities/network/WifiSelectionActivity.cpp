@@ -6,6 +6,7 @@
 #include <Logging.h>
 #include <WiFi.h>
 #ifndef SIMULATOR
+#include <HalNetwork.h>
 #include <esp_mac.h>
 #endif
 
@@ -573,6 +574,10 @@ void WifiSelectionActivity::checkConnectionStatus() {
     sConnectionAttemptLoggingActive = false;
 #endif
     LOG_INF("WIFI", "Connected to ssid=%s ip=%s rssi=%d", selectedSSID.c_str(), connectedIP.c_str(), WiFi.RSSI());
+
+#ifndef SIMULATOR
+    halNetwork.enableTcpDontFragmentOnStation();
+#endif
 
     // Sync RTC from NTP on the first successful WiFi connection only. The DS3231
     // drifts ~2 ppm so one sync is enough; users can force a re-sync from

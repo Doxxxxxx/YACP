@@ -16,6 +16,7 @@ struct CrossPointPosition {
   uint16_t liIndex = 0;            // Running <li> count at the matched XPath element
   bool hasLiIndex = false;         // True when target element is <li> and liIndex was resolved
   char xpathAnchorId[64] = {};     // First <a id> captured inside the matched XPath element
+  bool valid = false;              // True when spine and page mapping completed successfully
 };
 
 /**

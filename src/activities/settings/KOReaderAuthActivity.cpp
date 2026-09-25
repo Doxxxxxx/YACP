@@ -12,6 +12,7 @@
 #include "activities/network/WifiSelectionActivity.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
+#include "network/WifiPowerSaveGuard.h"
 
 void KOReaderAuthActivity::onWifiSelectionComplete(const bool success) {
   if (!success) {
@@ -37,6 +38,7 @@ void KOReaderAuthActivity::onWifiSelectionComplete(const bool success) {
 }
 
 void KOReaderAuthActivity::performAuthentication() {
+  WifiPowerSaveGuard wifiPowerSaveGuard;
   const auto result = KOReaderSyncClient::authenticate();
 
   {

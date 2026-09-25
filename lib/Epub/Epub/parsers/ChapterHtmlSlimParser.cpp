@@ -298,6 +298,9 @@ bool ChapterHtmlSlimParser::shouldAbortForLowMemory(const char* stage) {
   if (lowMemoryAbort) {
     return true;
   }
+  if (memoryPauseRequested_) {
+    return false;
+  }
 
   auto heap = MemoryBudget::snapshot();
   if (heap.freeHeap >= MIN_FREE_HEAP_FOR_TEXT_LAYOUT && heap.maxAllocHeap >= MIN_MAX_ALLOC_FOR_TEXT_LAYOUT) {
@@ -315,6 +318,24 @@ bool ChapterHtmlSlimParser::shouldAbortForLowMemory(const char* stage) {
         return false;
       }
     }
+  }
+
+  // The normal full-chapter path still fails immediately here. Only the adaptive
+  // fallback may suspend Expat, expose completed pages, release rebuildable font
+  // caches, and resume the exact same parser state on the next page request.
+  if (adaptiveMemoryPauseEnabled_ && activeParser && completedPageCount > 0 &&
+      completedPageCount > lastMemoryPausePage_) {
+    const XML_Status stopStatus = XML_StopParser(activeParser, XML_TRUE);
+    if (stopStatus == XML_STATUS_OK) {
+      lastMemoryPausePage_ = completedPageCount;
+      memoryPauseRequested_ = true;
+      LOG_INF("EHP", "Pausing adaptive parse during %s at page %d (%u free, %u max alloc)", stage,
+              completedPageCount, heap.freeHeap, heap.maxAllocHeap);
+      // Expat does not replay the event that requested a resumable stop. Finish
+      // this one callback so element, style, and text state remain coherent.
+      return false;
+    }
+    LOG_ERR("EHP", "Could not suspend adaptive parse during %s", stage);
   }
 
   LOG_ERR("EHP", "Low heap during %s (%u free, %u max alloc); aborting section build", stage, heap.freeHeap,
@@ -2672,6 +2693,10 @@ ChapterHtmlSlimParser::~ChapterHtmlSlimParser() { abortParse(); }
 
 bool ChapterHtmlSlimParser::beginParse() {
   malformedMarkupTruncated = false;
+  memoryPauseRequested_ = false;
+  parserSuspended_ = false;
+  suspendedChunkWasFinal_ = false;
+  lastMemoryPausePage_ = -1;
   // Initialize block style stack with a root entry representing "no ancestor block elements".
   // The user's paragraph alignment is set as the default so child elements without explicit
   // text-align inherit it correctly through getCombinedBlockStyle.
@@ -2755,6 +2780,28 @@ ChapterHtmlSlimParser::ParseStatus ChapterHtmlSlimParser::parseStep() {
     return ParseStatus::Error;
   }
 
+  if (parserSuspended_) {
+    memoryPauseRequested_ = false;
+    const XML_Status resumeStatus = XML_ResumeParser(activeParser);
+    if (resumeStatus == XML_STATUS_ERROR) {
+      LOG_ERR("EHP", "Parse resume error at line %lu:\n%s", XML_GetCurrentLineNumber(activeParser),
+              XML_ErrorString(XML_GetErrorCode(activeParser)));
+      return ParseStatus::Error;
+    }
+    if (resumeStatus == XML_STATUS_SUSPENDED) {
+      return memoryPauseRequested_ ? ParseStatus::Paused : ParseStatus::Done;
+    }
+
+    parserSuspended_ = false;
+    if (lowMemoryAbort) {
+      LOG_ERR("EHP", "Aborting resumed section parse due to low heap");
+      return ParseStatus::Error;
+    }
+    if (previewStopRequested || suspendedChunkWasFinal_) {
+      return ParseStatus::Done;
+    }
+  }
+
   void* const buf = XML_GetBuffer(activeParser, PARSE_BUFFER_SIZE);
   if (!buf) {
     LOG_ERR("EHP", "Couldn't allocate memory for buffer");
@@ -2784,6 +2831,12 @@ ChapterHtmlSlimParser::ParseStatus ChapterHtmlSlimParser::parseStep() {
     return ParseStatus::Error;
   }
 
+  if (parseStatus == XML_STATUS_SUSPENDED && memoryPauseRequested_) {
+    parserSuspended_ = true;
+    suspendedChunkWasFinal_ = done;
+    return ParseStatus::Paused;
+  }
+
   if (done || previewStopRequested || parseStatus == XML_STATUS_SUSPENDED) {
     return ParseStatus::Done;
   }
@@ -2803,6 +2856,9 @@ void ChapterHtmlSlimParser::abortParse() {
   inlineStyleCount_ = 0;
   blockStyleBuf_ = nullptr;
   blockStyleCount_ = 0;
+  memoryPauseRequested_ = false;
+  parserSuspended_ = false;
+  suspendedChunkWasFinal_ = false;
 }
 
 bool ChapterHtmlSlimParser::finishParse() {

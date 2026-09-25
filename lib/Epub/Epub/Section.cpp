@@ -28,6 +28,8 @@ constexpr uint32_t HEADER_SIZE = sizeof(SECTION_CACHE_MAGIC) + sizeof(uint8_t) +
                                  sizeof(uint32_t) + sizeof(uint32_t);
 constexpr size_t SECTION_HTML_STREAM_CHUNK_SIZE = 8192;
 constexpr size_t LOW_MEMORY_SECTION_HTML_STREAM_CHUNK_SIZE = 1024;
+constexpr uint32_t ADAPTIVE_PAUSE_MIN_FREE_HEAP = 52U * 1024U;
+constexpr uint32_t ADAPTIVE_PAUSE_MIN_MAX_ALLOC = 40U * 1024U;
 
 struct PageLutEntry {
   uint32_t fileOffset;
@@ -92,6 +94,8 @@ Section::Section(const std::shared_ptr<Epub>& epub, const int spineIndex, GfxRen
       renderer(renderer),
       filePath(epub->getCachePath() + "/sections/" + std::to_string(spineIndex) + (cacheSuffix ? cacheSuffix : "") +
                ".bin") {}
+
+Section::~Section() { abandonAdaptiveBuild(); }
 
 uint32_t Section::onPageComplete(std::unique_ptr<Page> page) {
   if (!file) {
@@ -595,12 +599,328 @@ bool Section::createSectionFile(const int fontId, const float lineCompression, c
   return true;
 }
 
+bool Section::startAdaptiveBuild(const int fontId, const float lineCompression, const bool extraParagraphSpacing,
+                                 const bool forceParagraphIndents, const uint8_t paragraphAlignment,
+                                 const uint16_t viewportWidth, const uint16_t viewportHeight,
+                                 const bool hyphenationEnabled, const bool embeddedStyle,
+                                 const uint8_t imageRendering, const bool bionicReadingEnabled,
+                                 const bool guideReadingEnabled, const std::function<void()>& popupFn,
+                                 const EpubRenderMode renderMode) {
+  if (adaptiveBuild_) {
+    LOG_ERR("SCT", "Adaptive build already active for spine %d", spineIndex);
+    return false;
+  }
+
+  adaptiveBuildComplete_ = false;
+  adaptiveBuiltPageCount_ = 0;
+  pageCount = 0;
+  const auto localPath = epub->getSpineItem(spineIndex).href;
+  const auto htmlDir = epub->getCachePath() + "/html";
+  const auto htmlPath = htmlDir + "/" + std::to_string(spineIndex) + ".html";
+  const auto tmpHtmlPath = htmlDir + "/.tmp_adaptive_" + std::to_string(spineIndex) + ".html";
+  const auto tmpSectionPath = filePath + ".adaptive.tmp";
+
+  Storage.mkdir((epub->getCachePath() + "/sections").c_str());
+  Storage.mkdir(htmlDir.c_str());
+
+  bool htmlCached = Storage.exists(htmlPath.c_str());
+  if (!htmlCached) {
+    bool streamed = false;
+    for (int attempt = 0; attempt < 3 && !streamed; ++attempt) {
+      if (attempt > 0) delay(50);
+      if (Storage.exists(tmpHtmlPath.c_str())) Storage.remove(tmpHtmlPath.c_str());
+      HalFile tmpHtml;
+      if (!Storage.openFileForWrite("SCT", tmpHtmlPath, tmpHtml)) continue;
+      {
+        auto zipInflateScratch = acquireSectionZipInflateScratch(renderer, fontId, "adaptive section HTML inflate");
+        streamed = epub->readItemContentsToStream(localPath, tmpHtml, LOW_MEMORY_SECTION_HTML_STREAM_CHUNK_SIZE);
+      }
+      tmpHtml.close();
+      if (!streamed && Storage.exists(tmpHtmlPath.c_str())) Storage.remove(tmpHtmlPath.c_str());
+    }
+    if (!streamed) {
+      LOG_ERR("SCT", "Failed to stream HTML for adaptive section build");
+      return false;
+    }
+    if (Storage.rename(tmpHtmlPath.c_str(), htmlPath.c_str())) {
+      htmlCached = true;
+    }
+  }
+
+  if (Storage.exists(tmpSectionPath.c_str())) Storage.remove(tmpSectionPath.c_str());
+  if (!Storage.openFileForWrite("SCT", tmpSectionPath, file)) {
+    if (!htmlCached && Storage.exists(tmpHtmlPath.c_str())) Storage.remove(tmpHtmlPath.c_str());
+    return false;
+  }
+  if (!writeSectionFileHeader(fontId, lineCompression, extraParagraphSpacing, forceParagraphIndents,
+                              paragraphAlignment, viewportWidth, viewportHeight, hyphenationEnabled, embeddedStyle,
+                              imageRendering, bionicReadingEnabled, guideReadingEnabled, renderMode)) {
+    file.close();
+    Storage.remove(tmpSectionPath.c_str());
+    return false;
+  }
+
+  // This state outlives render calls and the resumable parser. It is heap-backed because
+  // the parser and its 8 KB initial LUT cannot fit safely on the render task stack.
+  auto ctx = makeUniqueNoThrow<AdaptiveBuildContext>();
+  if (!ctx) {
+    LOG_ERR("SCT", "Failed to allocate adaptive build context");
+    file.close();
+    Storage.remove(tmpSectionPath.c_str());
+    return false;
+  }
+  ctx->lutCapacity = INITIAL_SECTION_PAGE_LUT_ENTRIES;
+  ctx->lut = makeUniqueNoThrow<PageLutEntry[]>(ctx->lutCapacity);
+  if (!ctx->lut) {
+    LOG_ERR("SCT", "Failed to allocate adaptive page LUT (%u bytes)",
+            static_cast<unsigned>(ctx->lutCapacity * sizeof(PageLutEntry)));
+    file.close();
+    Storage.remove(tmpSectionPath.c_str());
+    return false;
+  }
+  ctx->htmlCached = htmlCached;
+  ctx->fontId = fontId;
+  ctx->htmlPath = htmlPath;
+  ctx->tmpHtmlPath = tmpHtmlPath;
+  ctx->parsePath = htmlCached ? htmlPath : tmpHtmlPath;
+  const size_t lastSlash = localPath.find_last_of('/');
+  ctx->contentBase = lastSlash != std::string::npos ? localPath.substr(0, lastSlash + 1) : "";
+  ctx->imageBasePath = epub->getCachePath() + "/img_" + std::to_string(spineIndex) + "_";
+
+  // The fallback starts only after the normal build ran out of safe headroom. Drop
+  // rebuildable SD-font page data before hydrating CSS and parser state.
+  renderer.releaseSdCardFontForLowMemory(fontId);
+
+  if (embeddedStyle) {
+    ctx->cssParser = epub->getCssParser();
+    if (ctx->cssParser && !ctx->cssParser->loadFromCache()) {
+      LOG_ERR("SCT", "Failed to load CSS cache for adaptive build");
+    }
+  }
+
+  std::vector<std::string> tocAnchors;
+  const int startTocIndex = epub->getTocIndexForSpineIndex(spineIndex);
+  if (startTocIndex >= 0) {
+    const int remainingTocItems = epub->getTocItemsCount() - startTocIndex;
+    if (remainingTocItems > 0) tocAnchors.reserve(static_cast<size_t>(remainingTocItems));
+    for (int i = startTocIndex; i < epub->getTocItemsCount(); ++i) {
+      auto entry = epub->getTocItem(i);
+      if (entry.spineIndex != spineIndex) break;
+      if (!entry.anchor.empty()) tocAnchors.push_back(std::move(entry.anchor));
+    }
+  }
+
+  AdaptiveBuildContext* const ctxPtr = ctx.get();
+  ctx->parser = makeUniqueNoThrow<ChapterHtmlSlimParser>(
+      epub, ctxPtr->parsePath, renderer, fontId, lineCompression, extraParagraphSpacing, forceParagraphIndents,
+      paragraphAlignment, viewportWidth, viewportHeight, hyphenationEnabled, bionicReadingEnabled,
+      guideReadingEnabled,
+      [this, ctxPtr](std::unique_ptr<Page> page, const uint16_t paragraphIndex, const uint16_t listItemIndex) {
+        if (ctxPtr->pageCompletionFailed) return;
+        if (ctxPtr->lutCount == UINT16_MAX ||
+            !ensurePageLutCapacity(ctxPtr->lut, ctxPtr->lutCapacity, ctxPtr->lutCount)) {
+          LOG_ERR("SCT", "Adaptive section page LUT exhausted");
+          ctxPtr->pageCompletionFailed = true;
+          return;
+        }
+        const uint32_t offset = onPageComplete(std::move(page));
+        if (offset == 0) {
+          ctxPtr->pageCompletionFailed = true;
+          return;
+        }
+        ctxPtr->lut[ctxPtr->lutCount++] = {offset, paragraphIndex, listItemIndex};
+        adaptiveBuiltPageCount_ = ctxPtr->lutCount;
+      },
+      embeddedStyle, ctxPtr->contentBase, ctxPtr->imageBasePath, imageRendering, std::move(tocAnchors), popupFn,
+      ctxPtr->cssParser, renderMode);
+  if (!ctx->parser) {
+    LOG_ERR("SCT", "Failed to allocate adaptive chapter parser");
+    if (ctx->cssParser) ctx->cssParser->clear();
+    file.close();
+    Storage.remove(tmpSectionPath.c_str());
+    return false;
+  }
+
+  Hyphenator::setPreferredLanguage(epub->getLanguage());
+  adaptiveBuild_ = std::move(ctx);
+  adaptiveBuild_->parser->setAdaptiveMemoryPauseEnabled(true);
+  if (!adaptiveBuild_->parser->beginParse()) {
+    LOG_ERR("SCT", "Failed to begin adaptive section parse");
+    abandonAdaptiveBuild();
+    return false;
+  }
+  LOG_INF("SCT", "Adaptive section build started for spine %d", spineIndex);
+  return true;
+}
+
+bool Section::buildAdaptivePages(const uint16_t maxAdditionalPages) {
+  if (!adaptiveBuild_ || !adaptiveBuild_->parser) return false;
+
+  const uint16_t startCount = adaptiveBuiltPageCount_;
+  for (;;) {
+    const auto status = adaptiveBuild_->parser->parseStep();
+    if (status == ChapterHtmlSlimParser::ParseStatus::Error || adaptiveBuild_->pageCompletionFailed) {
+      LOG_ERR("SCT", "Adaptive section parse failed at page %u", adaptiveBuiltPageCount_);
+      abandonAdaptiveBuild();
+      return false;
+    }
+    if (status == ChapterHtmlSlimParser::ParseStatus::Done) {
+      return finalizeAdaptiveBuild();
+    }
+    if (status == ChapterHtmlSlimParser::ParseStatus::Paused) {
+      if (adaptiveBuiltPageCount_ == 0) {
+        LOG_ERR("SCT", "Adaptive section paused before its first page");
+        abandonAdaptiveBuild();
+        return false;
+      }
+      LOG_INF("SCT", "Adaptive section parser paused at %u pages (%u new)", adaptiveBuiltPageCount_,
+              adaptiveBuiltPageCount_ - startCount);
+      renderer.releaseSdCardFontForLowMemory(adaptiveBuild_->fontId);
+      return true;
+    }
+
+    const uint16_t pagesAdded = adaptiveBuiltPageCount_ - startCount;
+    if (maxAdditionalPages > 0 && pagesAdded >= maxAdditionalPages) {
+      renderer.releaseSdCardFontForLowMemory(adaptiveBuild_->fontId);
+      return true;
+    }
+
+    if (pagesAdded > 0) {
+      const auto heap = MemoryBudget::snapshot();
+      if (heap.freeHeap < ADAPTIVE_PAUSE_MIN_FREE_HEAP || heap.maxAllocHeap < ADAPTIVE_PAUSE_MIN_MAX_ALLOC) {
+        LOG_INF("SCT", "Adaptive build paused at %u pages (free=%u maxAlloc=%u)", adaptiveBuiltPageCount_,
+                heap.freeHeap, heap.maxAllocHeap);
+        renderer.releaseSdCardFontForLowMemory(adaptiveBuild_->fontId);
+        return true;
+      }
+    }
+  }
+}
+
+bool Section::finalizeAdaptiveBuild() {
+  if (!adaptiveBuild_ || !adaptiveBuild_->parser) return false;
+  if (!adaptiveBuild_->parser->finishParse() || adaptiveBuild_->pageCompletionFailed) {
+    abandonAdaptiveBuild();
+    return false;
+  }
+
+  if (!adaptiveBuild_->htmlCached) {
+    if (!Storage.rename(adaptiveBuild_->tmpHtmlPath.c_str(), adaptiveBuild_->htmlPath.c_str())) {
+      LOG_DBG("SCT", "Failed to promote adaptive HTML cache");
+      Storage.remove(adaptiveBuild_->tmpHtmlPath.c_str());
+    } else {
+      adaptiveBuild_->htmlCached = true;
+    }
+  }
+
+  adaptiveBuiltPageCount_ = adaptiveBuild_->lutCount;
+  const uint32_t lutOffset = file.position();
+  for (uint16_t i = 0; i < adaptiveBuild_->lutCount; ++i) {
+    if (adaptiveBuild_->lut[i].fileOffset == 0 ||
+        !serialization::tryWritePod(file, adaptiveBuild_->lut[i].fileOffset)) {
+      abandonAdaptiveBuild();
+      return false;
+    }
+  }
+
+  const uint32_t anchorMapOffset = file.position();
+  const auto& anchors = adaptiveBuild_->parser->getAnchors();
+  if (anchors.size() > UINT16_MAX ||
+      !serialization::tryWritePod(file, static_cast<uint16_t>(anchors.size()))) {
+    abandonAdaptiveBuild();
+    return false;
+  }
+  for (const auto& [anchor, page] : anchors) {
+    if (!serialization::tryWriteString(file, anchor) || !serialization::tryWritePod(file, page)) {
+      abandonAdaptiveBuild();
+      return false;
+    }
+  }
+
+  const uint32_t paragraphLutOffset = file.position();
+  if (!serialization::tryWritePod(file, adaptiveBuild_->lutCount)) {
+    abandonAdaptiveBuild();
+    return false;
+  }
+  for (uint16_t i = 0; i < adaptiveBuild_->lutCount; ++i) {
+    if (!serialization::tryWritePod(file, adaptiveBuild_->lut[i].paragraphIndex)) {
+      abandonAdaptiveBuild();
+      return false;
+    }
+  }
+
+  const uint32_t liLutOffset = file.position();
+  for (uint16_t i = 0; i < adaptiveBuild_->lutCount; ++i) {
+    if (!serialization::tryWritePod(file, adaptiveBuild_->lut[i].listItemIndex)) {
+      abandonAdaptiveBuild();
+      return false;
+    }
+  }
+
+  pageCount = adaptiveBuiltPageCount_;
+  if (!file.seek(HEADER_SIZE - sizeof(uint32_t) * 4 - sizeof(pageCount)) ||
+      !serialization::tryWritePod(file, pageCount) || !serialization::tryWritePod(file, lutOffset) ||
+      !serialization::tryWritePod(file, anchorMapOffset) ||
+      !serialization::tryWritePod(file, paragraphLutOffset) || !serialization::tryWritePod(file, liLutOffset) ||
+      !file.sync()) {
+    abandonAdaptiveBuild();
+    return false;
+  }
+
+  file.close();
+  const auto tmpSectionPath = filePath + ".adaptive.tmp";
+  if (Storage.exists(filePath.c_str())) Storage.remove(filePath.c_str());
+  if (!Storage.rename(tmpSectionPath.c_str(), filePath.c_str())) {
+    LOG_ERR("SCT", "Failed to promote adaptive section cache");
+    Storage.remove(tmpSectionPath.c_str());
+    if (adaptiveBuild_->cssParser) adaptiveBuild_->cssParser->clear();
+    adaptiveBuild_.reset();
+    pageCount = 0;
+    return false;
+  }
+  if (adaptiveBuild_->cssParser) adaptiveBuild_->cssParser->clear();
+  adaptiveBuild_.reset();
+  adaptiveBuildComplete_ = true;
+  LOG_INF("SCT", "Adaptive section build complete: %u pages", pageCount);
+  return true;
+}
+
+void Section::abandonAdaptiveBuild() {
+  if (!adaptiveBuild_) return;
+  if (adaptiveBuild_->parser) adaptiveBuild_->parser->abortParse();
+  if (adaptiveBuild_->cssParser) adaptiveBuild_->cssParser->clear();
+  if (file) file.close();
+  const auto tmpSectionPath = filePath + ".adaptive.tmp";
+  if (Storage.exists(tmpSectionPath.c_str())) Storage.remove(tmpSectionPath.c_str());
+  if (!adaptiveBuild_->htmlCached && Storage.exists(adaptiveBuild_->tmpHtmlPath.c_str())) {
+    Storage.remove(adaptiveBuild_->tmpHtmlPath.c_str());
+  }
+  adaptiveBuild_.reset();
+  adaptiveBuiltPageCount_ = 0;
+  adaptiveBuildComplete_ = false;
+  pageCount = 0;
+}
+
+std::unique_ptr<Page> Section::loadPageDuringAdaptiveBuild(const int page) {
+  if (!adaptiveBuild_ || !file || page < 0 || page >= adaptiveBuild_->lutCount) return nullptr;
+  const uint32_t pagePos = adaptiveBuild_->lut[page].fileOffset;
+  if (pagePos == 0) return nullptr;
+  const uint32_t writePos = file.position();
+  if (!file.seek(pagePos)) return nullptr;
+  auto result = Page::deserialize(file);
+  file.seek(writePos);
+  return result;
+}
+
 bool Section::hasHtmlCache() const {
   const std::string htmlPath = epub->getCachePath() + "/html/" + std::to_string(spineIndex) + ".html";
   return Storage.exists(htmlPath.c_str());
 }
 
 std::unique_ptr<Page> Section::loadPageFromSectionFile() {
+  if (adaptiveBuild_ && currentPage >= 0 && currentPage < adaptiveBuiltPageCount_) {
+    return loadPageDuringAdaptiveBuild(currentPage);
+  }
   if (!file) {
     if (!Storage.openFileForRead("SCT", filePath, file)) {
       return nullptr;

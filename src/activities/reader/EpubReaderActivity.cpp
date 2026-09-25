@@ -3855,6 +3855,13 @@ void EpubReaderActivity::pageTurn(bool isForwardTurn, const char* source) {
     uint32_t forwardReadSeconds = 0;
     const bool shouldRecordForwardRead = forwardPageReadElapsed(forwardReadSeconds, source);
     recordCurrentPageReadingTime(source);
+    if (section && section->isAdaptiveBuilding() && section->pageCount > 0 &&
+        section->currentPage >= section->pageCount - 1) {
+      // The current page is an adaptive watermark, not the end of the chapter.
+      // A render-driven refill will extend it without a continuously running worker.
+      requestUpdate();
+      return;
+    }
     const bool exitingChapter = section && section->pageCount > 0 && section->currentPage >= section->pageCount - 1;
     if (section->currentPage < section->pageCount - 1) {
       section->currentPage++;
@@ -4015,11 +4022,27 @@ void EpubReaderActivity::render(RenderLock&& lock) {
         // The popup's own refresh is a plain FAST, so force the page that replaces it onto the HALF
         // ghost-cleanup path -- otherwise the "INDEXING" text ghosts under the rendered page.
         ReaderUtils::forceFullRefresh(pagesUntilFullRefresh);
-        const bool buildSucceeded = section->createSectionFile(
+        bool buildSucceeded = section->createSectionFile(
             fontId, SETTINGS.getReaderLineCompression(), SETTINGS.extraParagraphSpacing, SETTINGS.forceParagraphIndents,
             SETTINGS.paragraphAlignment, viewportWidth, viewportHeight, SETTINGS.hyphenationEnabled,
             profile.embeddedStyle, SETTINGS.imageRendering, profile.bionicReadingEnabled, profile.guideReadingEnabled,
             popupFn, &attemptImagesWereSuppressed, &attemptLayoutAbortedForLowMemory, profile.renderMode, buildOptions);
+        if (!buildSucceeded && attemptLayoutAbortedForLowMemory && !buildingFootnotePreview) {
+          LOG_INF("ERS", "Full chapter layout reached the heap guard; switching spine %d to adaptive layout",
+                  currentSpineIndex);
+          buildSucceeded = section->startAdaptiveBuild(
+                               fontId, SETTINGS.getReaderLineCompression(), SETTINGS.extraParagraphSpacing,
+                               SETTINGS.forceParagraphIndents, SETTINGS.paragraphAlignment, viewportWidth,
+                               viewportHeight, SETTINGS.hyphenationEnabled, profile.embeddedStyle,
+                               SETTINGS.imageRendering, profile.bionicReadingEnabled, profile.guideReadingEnabled,
+                               popupFn, profile.renderMode) &&
+                           section->buildAdaptivePages(8) && section->pageCount > 0;
+          if (buildSucceeded) {
+            attemptLayoutAbortedForLowMemory = false;
+            LOG_INF("ERS", "Adaptive layout ready: spine=%d pagesAvailable=%u", currentSpineIndex,
+                    section->pageCount);
+          }
+        }
         imagesWereSuppressed = imagesWereSuppressed || attemptImagesWereSuppressed;
         layoutAbortedForLowMemory = attemptLayoutAbortedForLowMemory;
         if (buildSucceeded) {
@@ -4287,7 +4310,20 @@ void EpubReaderActivity::render(RenderLock&& lock) {
     LOG_DBG("ERS", "Rendered page in %dms", millis() - start);
   }
   if (!activeFootnotePreview) {
-    silentIndexNextChapterIfNeeded(viewportWidth, viewportHeight);
+    if (section->isAdaptiveBuilding() && section->pageCount > 0 &&
+        section->currentPage + 2 >= static_cast<int>(section->pageCount)) {
+      // Event-driven refill only: no timer, task, or SD activity while the reader is
+      // farther than two pages from the adaptive watermark.
+      releaseGrayscaleStripScratch();
+      if (!section->buildAdaptivePages(8)) {
+        LOG_ERR("ERS", "Failed to extend adaptive section at page %d", section->currentPage);
+        showLowMemoryLayoutError();
+        return;
+      }
+    }
+    if (!section->isAdaptiveBuilding()) {
+      silentIndexNextChapterIfNeeded(viewportWidth, viewportHeight);
+    }
     if (!queueProgressSave(currentSpineIndex, section->currentPage, section->pageCount)) {
       pendingSyncSaveError = true;
     }
@@ -4302,7 +4338,7 @@ void EpubReaderActivity::render(RenderLock&& lock) {
 }
 
 void EpubReaderActivity::silentIndexNextChapterIfNeeded(const uint16_t viewportWidth, const uint16_t viewportHeight) {
-  if (activeFootnotePreview || !epub || !section || section->pageCount == 0) {
+  if (activeFootnotePreview || !epub || !section || section->pageCount == 0 || section->isAdaptiveBuilding()) {
     return;
   }
 

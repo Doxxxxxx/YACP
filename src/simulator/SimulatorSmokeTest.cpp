@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <cstdlib>
+#include <cstring>
 #include <exception>
 #include <memory>
 #include <vector>
@@ -69,6 +70,16 @@ class SimulatorSmokeTest {
   size_t scriptIndex = 0;
 
   static bool enabled() { return std::getenv("CROSSINK_SIMULATOR_SMOKE_TEST") != nullptr; }
+
+  static bool modeIs(const char* expected) {
+    const char* mode = std::getenv("CROSSINK_SIMULATOR_SMOKE_MODE");
+    return mode != nullptr && std::strcmp(mode, expected) == 0;
+  }
+
+  static const char* configuredBookPath() {
+    const char* bookPath = std::getenv("CROSSINK_SIMULATOR_SMOKE_BOOK");
+    return bookPath != nullptr && bookPath[0] != '\0' ? bookPath : nullptr;
+  }
 
   static int pageTurnCount() {
     const char* raw = std::getenv("CROSSINK_SIMULATOR_SMOKE_PAGE_TURNS");
@@ -141,11 +152,31 @@ class SimulatorSmokeTest {
           fail("Sleep screen migration contract failed");
         }
         applyRequestedTheme();
+
+        if (modeIs("dictionary")) {
+          const char* bookPath = configuredBookPath();
+          if (bookPath == nullptr || !Storage.exists(bookPath)) {
+            fail("Dictionary smoke test book is missing: %s", bookPath == nullptr ? "(unset)" : bookPath);
+          }
+          activityManager.goToReader(bookPath, true);
+          queueStep("Dictionary Reader", SmokeStep::Reader, 8);
+          break;
+        }
+
         activityManager.goHome();
-        queueStep("Home", SmokeStep::Home);
+        queueStep(modeIs("cjk") ? "CJK Home" : "Home", SmokeStep::Home);
         break;
 
       case SmokeStep::Home:
+        if (modeIs("cjk")) {
+          const char* bookPath = configuredBookPath();
+          if (bookPath == nullptr || !Storage.exists(bookPath)) {
+            fail("CJK smoke test book is missing: %s", bookPath == nullptr ? "(unset)" : bookPath);
+          }
+          activityManager.goToReader(bookPath, true);
+          queueStep("CJK Reader", SmokeStep::Reader, 8);
+          break;
+        }
         activityManager.goToFileBrowser("/books");
         queueStep("File Browser", SmokeStep::FileBrowser);
         break;
@@ -178,7 +209,7 @@ class SimulatorSmokeTest {
         break;
 
       case SmokeStep::Sleep: {
-        const char* bookPath = std::getenv("CROSSINK_SIMULATOR_SMOKE_BOOK");
+        const char* bookPath = configuredBookPath();
         if (bookPath == nullptr || bookPath[0] == '\0') {
           LOG_INF("SMOKE", "Skipping Reader step; CROSSINK_SIMULATOR_SMOKE_BOOK is not set");
           step = SmokeStep::Reader;
@@ -193,7 +224,11 @@ class SimulatorSmokeTest {
       }
 
       case SmokeStep::Reader:
-        buildReaderInputScript();
+        if (modeIs("dictionary")) {
+          buildDictionaryInputScript();
+        } else {
+          buildReaderInputScript();
+        }
         step = SmokeStep::ReaderInput;
         break;
 
@@ -236,6 +271,8 @@ class SimulatorSmokeTest {
     inputScript.push_back(render("Reader Menu opened from EPUB", 4));
 
     addTap(MappedInputManager::Button::Down);
+    addTap(MappedInputManager::Button::Down);
+    addTap(MappedInputManager::Button::Down);
     inputScript.push_back(render("Reader Menu Reader Options selection", 3));
 
     addTap(MappedInputManager::Button::Confirm);
@@ -254,6 +291,31 @@ class SimulatorSmokeTest {
     inputScript.push_back(render("Reader after closing Reader Menu", 4));
 
     LOG_INF("SMOKE", "Running reader input script with %d page turn(s)", turns);
+  }
+
+  void buildDictionaryInputScript() {
+    inputScript.clear();
+    scriptIndex = 0;
+
+    addTap(MappedInputManager::Button::Confirm);
+    inputScript.push_back(render("Dictionary Reader Menu", 4));
+
+    addTap(MappedInputManager::Button::Down);
+    inputScript.push_back(render("Dictionary Menu Selection", 3));
+
+    addTap(MappedInputManager::Button::Confirm);
+    inputScript.push_back(render("Dictionary Word Selector", 6));
+
+    addTap(MappedInputManager::Button::Confirm);
+    inputScript.push_back(render("Dictionary Definition", 6));
+
+    addTap(MappedInputManager::Button::Back);
+    inputScript.push_back(render("Dictionary Selector Closed", 5));
+
+    addTap(MappedInputManager::Button::Back);
+    inputScript.push_back(render("Dictionary Reader Closed", 5));
+
+    LOG_INF("SMOKE", "Running dictionary lookup input script");
   }
 
   void runReaderInputScript() {

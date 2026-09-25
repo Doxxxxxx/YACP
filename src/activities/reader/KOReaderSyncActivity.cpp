@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <cassert>
+#include <cmath>
 
 #include "CrossPointSettings.h"
 #include "Epub/Section.h"
@@ -20,6 +21,7 @@
 #include "ReaderUtils.h"
 #include "SdCardFontSystem.h"
 #include "SilentRestart.h"
+#include "network/WifiPowerSaveGuard.h"
 #include "activities/ActivityManager.h"
 #include "activities/network/WifiSelectionActivity.h"
 #include "components/UITheme.h"
@@ -101,6 +103,12 @@ void KOReaderSyncActivity::saveProgressAndReturn(const CrossPointPosition& posit
 
 void KOReaderSyncActivity::returnToReader() { activityManager.goToReader(epubPath); }
 
+bool KOReaderSyncActivity::smartSyncEnabled() const {
+  return KOREADER_STORE.getSyncBehavior() == KOReaderSyncBehavior::SMART;
+}
+
+void KOReaderSyncActivity::scheduleAutoReturn() { autoReturnAt = static_cast<uint32_t>(millis()) + 1200U; }
+
 bool KOReaderSyncActivity::consumeInitialConfirmRelease() {
   if (!lockInitialConfirmRelease) {
     return false;
@@ -143,6 +151,8 @@ void KOReaderSyncActivity::onWifiSelectionComplete(const bool success) {
 }
 
 void KOReaderSyncActivity::performSync() {
+  WifiPowerSaveGuard wifiPowerSaveGuard;
+
   // Calculate document hash based on user's preferred method
   if (KOREADER_STORE.getMatchMethod() == DocumentMatchMethod::FILENAME) {
     documentHash = KOReaderDocumentId::calculateFromFilename(epubPath);
@@ -181,6 +191,11 @@ void KOReaderSyncActivity::performSync() {
   const auto result = KOReaderSyncClient::getProgress(documentHash, remoteProgress);
 
   if (result == KOReaderSyncClient::NOT_FOUND) {
+    if (smartSyncEnabled()) {
+      performUpload();
+      return;
+    }
+
     // No remote progress - offer to upload
     {
       RenderLock lock(*this);
@@ -271,6 +286,19 @@ void KOReaderSyncActivity::performSync() {
   }
   // localProgress was pre-computed in EpubReaderActivity before the Epub was released.
 
+  if (smartSyncEnabled() && remotePosition.valid) {
+    constexpr float SAME_PROGRESS_EPSILON = 0.001f;
+    const float progressDelta = localProgress.percentage - remoteProgress.percentage;
+    if (progressDelta > SAME_PROGRESS_EPSILON) {
+      performUpload();
+      return;
+    }
+    if (progressDelta < -SAME_PROGRESS_EPSILON) {
+      saveProgressAndReturn(remotePosition);
+      return;
+    }
+  }
+
   {
     RenderLock lock(*this);
     state = SHOWING_RESULT;
@@ -286,6 +314,8 @@ void KOReaderSyncActivity::performSync() {
 }
 
 void KOReaderSyncActivity::performUpload() {
+  WifiPowerSaveGuard wifiPowerSaveGuard;
+
   {
     RenderLock lock(*this);
     state = UPLOADING;
@@ -335,6 +365,9 @@ void KOReaderSyncActivity::performUpload() {
     state = UPLOAD_COMPLETE;
   }
   requestUpdate(true);
+  if (smartSyncEnabled()) {
+    scheduleAutoReturn();
+  }
 }
 
 void KOReaderSyncActivity::onEnter() {
@@ -511,6 +544,11 @@ void KOReaderSyncActivity::loop() {
   }
 
   if (state == NO_CREDENTIALS || state == SYNC_FAILED || state == UPLOAD_COMPLETE) {
+    if (autoReturnAt != 0U && static_cast<int32_t>(static_cast<uint32_t>(millis()) - autoReturnAt) >= 0) {
+      autoReturnAt = 0;
+      returnToReader();
+      return;
+    }
     if (mappedInput.wasReleased(MappedInputManager::Button::Back)) {
       returnToReader();
     }

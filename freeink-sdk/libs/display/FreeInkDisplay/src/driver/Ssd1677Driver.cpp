@@ -373,24 +373,29 @@ void Ssd1677Driver::displayImpl(EpdBus& bus, const uint8_t* fb, const uint8_t* p
   // the single-pass HALF (0xD7 "_updateFull"); it never runs the multi-flash OTP
   // full waveform (0xF7 is a dead fallback branch there). Promote to HALF where
   // the board has one; boards without (Sticky) promote to their vendor FULL.
-  if (!turnOff) {
-    if (_needsInitialFull) {
-      // First paint after boot/wake must not be a differential FAST: it only drives
-      // pixels that differ from the RED baseline, so it can't clear whatever is
-      // physically on the panel (the boot screen) and that ghosts through. But a HALF
-      // or FULL the caller already asked for is non-differential (BYPASS_RED) and
-      // clears the panel + seeds the baseline on its own — honor it and just consume
-      // the one-shot. Only upgrade a FAST request. This keeps the boot logo (a HALF)
-      // from paying an extra multi-inversion FULL-waveform flash on top of its own.
-      if (mode == RefreshMode::Fast) mode = RefreshMode::Full;
-      _needsInitialFull = false;
+  if (_needsInitialFull) {
+    // First paint after boot/wake must not be a differential FAST: it only drives
+    // pixels that differ from the RED baseline, so it can't clear whatever is
+    // physically on the panel (the boot screen) and that ghosts through. But a HALF
+    // or FULL the caller already asked for is non-differential (BYPASS_RED) and
+    // clears the panel and seeds the baseline on its own. Honor it and just consume
+    // the one-shot. Only upgrade a FAST request. This keeps the boot logo (a HALF)
+    // from paying an extra multi-inversion FULL-waveform flash on top of its own.
+    //
+    // Run this for turnOff requests too. The waveform a paint needs is independent
+    // of whether the rails drop afterwards. Otherwise, Display Power Saving would
+    // prevent this one-shot from clearing the sleep screen after every wake.
+    if (mode == RefreshMode::Fast) {
       mode = (_cfg.halfSeqOverride != 0) ? RefreshMode::Half : RefreshMode::Full;
-    } else if (!_isScreenOn && _cfg.fullSeqOverride == 0) {
-      // X4-class cold start: panel asleep -> a (warmed) HALF full-clear. Override
-      // boards skip this — their fast sequence self-powers, so _isScreenOn is false
-      // every page and forcing HALF would make every page a slow full-waveform flash.
-      mode = RefreshMode::Half;
     }
+    _needsInitialFull = false;
+  } else if (!turnOff && !_isScreenOn && _cfg.fullSeqOverride == 0) {
+    // X4-class cold start: panel asleep -> a (warmed) HALF full-clear. Override
+    // boards skip this because their fast sequence self-powers, so _isScreenOn is
+    // false every page and forcing HALF would make every page a slow full refresh.
+    // A turnOff caller also powers the panel down after every refresh, so this state
+    // carries no cold-start signal for it and must remain gated.
+    mode = RefreshMode::Half;
   }
 
   // Leaving grayscale content without the firmware's cleanup: stock parity — the

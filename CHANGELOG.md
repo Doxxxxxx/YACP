@@ -1,3 +1,52 @@
+## [v1.8.0-yacp.1] - 2026-09-25
+
+This beta keeps YACP focused on reading: difficult books and unreliable networks should become usable without
+making ordinary offline reading heavier. It is published for broader validation before YACP 1.8 becomes stable.
+
+### Added
+
+- Unusually long EPUB chapters now have a bounded, on-demand pagination fallback. Ordinary chapters retain the
+  existing full-chapter path. The fallback activates only when the normal path reaches its heap safety guard, then
+  stores completed pages in batches and extends the cache as the reader approaches the current watermark.
+- KOReader Smart Sync can optionally keep the furthest valid reading position. Manual comparison remains the
+  default, and Smart Sync falls back to it whenever the positions cannot be mapped safely.
+
+### Changed
+
+- SD-card font lookup now stores Basic Multilingual Plane ranges in compact 16-bit records while keeping full-width
+  records for supplementary characters. CJK fonts use substantially less heap without losing glyph coverage, which
+  also leaves more memory available for long and heavily formatted chapters.
+- Firmware updates are downloaded to the SD card, verified, and installed only after the network is closed. HTTPS
+  streaming now follows GitHub redirects with bounded buffers instead of holding the firmware image in RAM.
+- New and reset configurations show battery current by default in the reader status bar on supported hardware. The
+  setting remains optional.
+
+### Fixed
+
+- Long chapters that previously stopped with "Chapter needs too much memory" can continue through adaptive
+  pagination. Chinese EPUB reports motivated the work, but the recovery path applies to any book with unusually
+  long, styled, or font-heavy chapters.
+- Full justification once again distributes the remaining line width across word gaps, restoring an even right edge
+  ([#8](https://github.com/Sichroteph/YACP/issues/8)).
+- Outgoing TCP traffic requests non-fragmented IPv4 packets, and KOReader temporarily disables WiFi power saving
+  during transfers. This improves compatibility with IPv6-only and 464XLAT hotspots
+  ([#9](https://github.com/Sichroteph/YACP/issues/9)).
+- The GitHub updater handles redirects and stages large downloads safely on SD
+  ([#7](https://github.com/Sichroteph/YACP/issues/7)).
+- X3 display-controller detection now follows the stock three-byte version protocol, caches a versioned result, and
+  distinguishes UC8279 from UC8253 without an unnecessary power-off cycle.
+
+### Credits
+
+- `walloftexts` reported the long-chapter failure with Chinese EPUBs and supplied detailed diagnostics.
+- `Doxxxxxx` reported and helped document the justification, hotspot networking, and Smart Sync improvements in
+  [#8](https://github.com/Sichroteph/YACP/issues/8),
+  [#9](https://github.com/Sichroteph/YACP/issues/9), and
+  [#10](https://github.com/Sichroteph/YACP/issues/10).
+- `OzzyMcBean` reported the OTA update failure in
+  [#7](https://github.com/Sichroteph/YACP/issues/7).
+- The staged OTA design builds on work from the CrossInk and CrossPoint projects.
+
 ## [v1.7.1-yacp] - 2026-09-20
 
 ### Added

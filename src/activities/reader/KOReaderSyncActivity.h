@@ -2,6 +2,7 @@
 #include <Epub.h>
 
 #include <functional>
+#include <cstdint>
 #include <memory>
 #include <optional>
 
@@ -86,6 +87,7 @@ class KOReaderSyncActivity final : public Activity {
   // which makes WiFi.getMode() return WIFI_MODE_NULL.
   bool wifiActivated = false;
   bool lockInitialConfirmRelease = false;
+  uint32_t autoReturnAt = 0;
 
   void onWifiSelectionComplete(bool success);
   void performSync();
@@ -94,4 +96,6 @@ class KOReaderSyncActivity final : public Activity {
   void ensureEpubLoaded();
   void saveProgressAndReturn(const CrossPointPosition& position);
   void returnToReader();
+  bool smartSyncEnabled() const;
+  void scheduleAutoReturn();
 };

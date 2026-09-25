@@ -84,6 +84,11 @@ class ChapterHtmlSlimParser {
   XML_Parser activeParser = nullptr;
   FsFile parseFile_;
   uint32_t parseStartTime_ = 0;
+  bool adaptiveMemoryPauseEnabled_ = false;
+  bool memoryPauseRequested_ = false;
+  bool parserSuspended_ = false;
+  bool suspendedChunkWasFinal_ = false;
+  int lastMemoryPausePage_ = -1;
 
   // Style tracking (replaces depth-based approach)
   struct StyleStackEntry {
@@ -263,12 +268,17 @@ class ChapterHtmlSlimParser {
   bool wasLowMemoryFallbackTriggered() const { return lowMemoryImageFallback; }
   bool wasLowMemoryAbortTriggered() const { return lowMemoryAbort; }
 
- private:
-  enum class ParseStatus { More, Done, Error };
+  // Resumable parse used only by YACP's low-memory section fallback. The normal
+  // path still calls parseAndBuildPages() and performs the same one-shot work.
+  enum class ParseStatus { More, Paused, Done, Error };
+  void setAdaptiveMemoryPauseEnabled(const bool enabled) { adaptiveMemoryPauseEnabled_ = enabled; }
   bool beginParse();
   ParseStatus parseStep();
   bool finishParse();  // flush the trailing page and tear down; returns true
   void abortParse();   // tear down without flushing (error / abandon)
+  size_t parseBytesConsumed() { return parseFile_ ? parseFile_.position() : 0; }
+  size_t parseTotalBytes() { return parseFile_ ? parseFile_.size() : 0; }
 
+ private:
   void addLineToPage(std::shared_ptr<TextBlock> line);
 };
