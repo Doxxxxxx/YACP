@@ -1,5 +1,10 @@
 ## [Unreleased]
 
+### Added
+
+- The KOReader Sync Behavior setting (Ask every time / Smart sync) can now also be changed from the web portal, next
+  to Document Matching. The default stays Ask every time.
+
 ### Changed
 
 - KOReader sync connection failures now report what actually failed. A name-resolution failure shows a dedicated DNS
