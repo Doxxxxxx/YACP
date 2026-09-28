@@ -48,9 +48,9 @@ void syncTimeWithNTP() {
   }
 
   if (retry < maxRetries) {
-    LOG_DBG("KOSync", "NTP time synced");
+    LOG_INF("KOSync", "NTP time synced");
   } else {
-    LOG_DBG("KOSync", "NTP sync timeout, using fallback");
+    LOG_INF("KOSync", "NTP sync timeout, using fallback");
   }
 }
 
@@ -128,7 +128,9 @@ void KOReaderSyncActivity::onWifiSelectionComplete(const bool success) {
     return;
   }
 
-  LOG_DBG("KOSync", "WiFi connected, starting sync");
+  LOG_INF("KOSync", "WiFi connected: ip=%s gw=%s dns0=%s dns1=%s rssi=%d ch=%d", WiFi.localIP().toString().c_str(),
+          WiFi.gatewayIP().toString().c_str(), WiFi.dnsIP(0).toString().c_str(), WiFi.dnsIP(1).toString().c_str(),
+          WiFi.RSSI(), WiFi.channel());
   sdFontSystem.releaseForNetwork(renderer);
 
   {

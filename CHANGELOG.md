@@ -1,3 +1,14 @@
+## [Unreleased]
+
+### Changed
+
+- KOReader sync connection failures now report what actually failed. A name-resolution failure shows a dedicated DNS
+  message, a connect or handshake timeout shows the timeout message, and a TLS handshake failure shows the secure
+  connection message; only a real TCP-level refusal keeps the "server refused the connection" text. The serial log also
+  records the underlying esp-tls and mbedTLS error codes, the NTP outcome and the network parameters (IP, gateway, DNS
+  servers, RSSI, channel) at the start of every sync, so failures that only happen on one network can be diagnosed
+  from a release build's log.
+
 ## [v1.8.0-yacp.1] - 2026-09-25
 
 This beta keeps YACP focused on reading: difficult books and unreliable networks should become usable without
